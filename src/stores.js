@@ -1,5 +1,4 @@
 import { writable } from 'svelte/store';
-import { dev } from '$app/environment';
 import { env } from '$env/dynamic/public';
 
 const defaultApiServer = 'https://api.thesplitkit.com';
@@ -20,10 +19,9 @@ function requireEventHost() {
 	return host.replace(/\/$/, '');
 }
 
-/** Split Kit + Socket.IO host. In dev, returns '' so /api/sk uses the Vite proxy. */
+/** Split Kit API base. Always same-origin; /api/sk is proxied by the SvelteKit route. */
 export function getRemoteServer() {
-	if (dev) return '';
-	return requireEventHost();
+	return '';
 }
 
 /** Alby API base. Always connects directly to PUBLIC_API_URL (never proxied). */
