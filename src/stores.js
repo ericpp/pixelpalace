@@ -60,6 +60,15 @@ export function getAlbyOAuthUrl(redirectUri) {
 	return `https://getalby.com/oauth?${params}`;
 }
 
+/** Must match exactly between OAuth authorize and token exchange (and Alby app settings). */
+export function getAlbyRedirectUri(url) {
+	let redirectUri = url.origin + url.pathname;
+	if (redirectUri.endsWith('/')) {
+		redirectUri = redirectUri.slice(0, -1);
+	}
+	return redirectUri;
+}
+
 function getLnurlCallbackTemplate() {
 	return optionalEnv('PUBLIC_LNURL_CALLBACK');
 }

@@ -1,8 +1,9 @@
 import { env } from '$env/dynamic/private';
+import { env as publicEnv } from '$env/dynamic/public';
 import { error } from '@sveltejs/kit';
 
 export function getAlbyCredentials() {
-	const clientId = env.ALBY_CLIENT_ID?.trim();
+	const clientId = env.ALBY_CLIENT_ID?.trim() || publicEnv.PUBLIC_ALBY_CLIENT_ID?.trim();
 	const clientSecret = env.ALBY_CLIENT_SECRET?.trim();
 	if (!clientId || !clientSecret) {
 		error(500, 'Alby OAuth credentials are not configured');
@@ -15,5 +16,5 @@ export function getAlbyJwtSecret() {
 	if (!secret) {
 		error(500, 'ALBY_JWT is not configured');
 	}
-	return secret;
+	return secret.split(/\s+/)[0];
 }

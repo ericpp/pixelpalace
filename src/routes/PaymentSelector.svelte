@@ -6,13 +6,14 @@
 
 	import { page } from '$app/stores';
 
-	import { getAlbyOAuthUrl, isAlbyEnabled, user, wallet } from '$/stores';
+	import { getAlbyOAuthUrl, getAlbyRedirectUri, isAlbyEnabled, user, wallet } from '$/stores';
+	import { storeAlbyRedirectUri } from '$lib/albyOAuth';
 	import { connectWallet } from '$lib/bitcoinConnect';
 
 	let connectingWallet = false;
 
 	const albyEnabled = isAlbyEnabled();
-	$: redirectUri = $page.url.origin + $page.url.pathname;
+	$: redirectUri = getAlbyRedirectUri($page.url);
 	$: redirectUrl = albyEnabled ? getAlbyOAuthUrl(redirectUri) : '';
 
 	async function handleWalletClick() {
@@ -44,6 +45,7 @@
 						if ($user.loggedIn) {
 							paymentType = 'alby';
 						} else {
+							storeAlbyRedirectUri(redirectUri);
 							window.location.href = redirectUrl;
 						}
 					}}

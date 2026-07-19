@@ -8,18 +8,22 @@ function basicAuthHeader() {
 }
 
 async function requestToken(body) {
+	const formData = new FormData();
+	for (const [key, value] of Object.entries(body)) {
+		formData.append(key, value);
+	}
+
 	const res = await fetch(TOKEN_URL, {
 		method: 'POST',
 		headers: {
-			Authorization: basicAuthHeader(),
-			'Content-Type': 'application/x-www-form-urlencoded'
+			Authorization: basicAuthHeader()
 		},
-		body: new URLSearchParams(body)
+		body: formData
 	});
 
 	if (!res.ok) {
 		const text = await res.text();
-		console.log('Alby oauth/token error:', text);
+		console.log('Alby oauth/token error:', text, 'redirect_uri:', body.redirect_uri || '(refresh)');
 		throw new Error(`Alby token request failed: ${res.status}`);
 	}
 

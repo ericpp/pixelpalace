@@ -16,7 +16,7 @@ export async function GET({ url, cookies }) {
 		setAwtCookie(cookies, signedToken);
 		return json(user);
 	} catch (err) {
-		console.log('alby auth:', err);
+		console.log('alby auth:', err, 'redirect_uri:', redirectUri);
 		return json({ message: 'Server Error' }, { status: 500 });
 	}
 }

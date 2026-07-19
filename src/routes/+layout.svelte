@@ -2,9 +2,14 @@
 	import './styles.css';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
-	import { getAlbyServer, isAlbyEnabled, user, albyReady, userReady, loaded } from '$/stores';
+	import { getAlbyServer, getAlbyRedirectUri, isAlbyEnabled, user, albyReady, userReady, loaded } from '$/stores';
 	import { setupBitcoinConnect } from '$lib/bitcoinConnect';
 	import { applyAlbyUser } from '$lib/functions/refreshAlbyToken';
+	import {
+		consumeAlbyRedirectUri,
+		hasUsedAlbyCode,
+		markAlbyCodeUsed
+	} from '$lib/albyOAuth';
 
 	onMount(async () => {
 		await setupBitcoinConnect();
@@ -20,31 +25,33 @@
 
 		const code = $page.url.searchParams.get('code');
 		if (code) {
-			const redirect_uri = $page.url.href.split('/?')[0].split('?')[0];
+			window.history.replaceState(null, '', window.location.pathname);
 
-			const res = await fetch(
-				getAlbyServer() + '/api/alby/auth?code=' + code + '&redirect_uri=' + redirect_uri,
-				{
+			if (!hasUsedAlbyCode(code)) {
+				markAlbyCodeUsed(code);
+				const redirect_uri = consumeAlbyRedirectUri(getAlbyRedirectUri($page.url));
+				const params = new URLSearchParams({ code, redirect_uri });
+				const res = await fetch(getAlbyServer() + '/api/alby/auth?' + params.toString(), {
 					credentials: 'include'
+				});
+				const data = await res.json();
+				if (applyAlbyUser(data)) {
+					$albyReady = true;
+					$userReady = true;
+					$loaded = true;
+					return;
 				}
-			);
-			const data = await res.json();
-			if (applyAlbyUser(data)) {
-				$albyReady = true;
-				$userReady = true;
 			}
-			const urlWithoutQuery = window.location.href.split('?')[0];
-			window.history.replaceState(null, null, urlWithoutQuery);
-		} else {
-			const res = await fetch(getAlbyServer() + '/api/alby/refresh', {
-				credentials: 'include'
-			});
-			const data = await res.json();
-			if (applyAlbyUser(data)) {
-				$userReady = true;
-			}
-			$albyReady = true;
 		}
+
+		const res = await fetch(getAlbyServer() + '/api/alby/refresh', {
+			credentials: 'include'
+		});
+		const data = await res.json();
+		if (applyAlbyUser(data)) {
+			$userReady = true;
+		}
+		$albyReady = true;
 		$loaded = true;
 	}
 </script>
