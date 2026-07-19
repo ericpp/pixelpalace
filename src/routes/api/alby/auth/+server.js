@@ -6,13 +6,14 @@ import { setAwtCookie } from '$lib/server/alby/cookies.js';
 export async function GET({ url, cookies }) {
 	const code = url.searchParams.get('code');
 	const redirectUri = url.searchParams.get('redirect_uri');
+	const codeVerifier = url.searchParams.get('code_verifier') || undefined;
 
 	if (!code) {
 		return json([]);
 	}
 
 	try {
-		const { signedToken, user } = await authenticateWithCode(code, redirectUri || '');
+		const { signedToken, user } = await authenticateWithCode(code, redirectUri || '', codeVerifier);
 		setAwtCookie(cookies, signedToken);
 		return json(user);
 	} catch (err) {

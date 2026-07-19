@@ -2,8 +2,8 @@ import { exchangeCode, refreshAccessToken } from './token.js';
 import { fetchAlbyUser } from './user.js';
 import { signAlbyToken, verifyAlbyToken } from './jwt.js';
 
-export async function authenticateWithCode(code, redirectUri) {
-	const tokenData = await exchangeCode(code, redirectUri);
+export async function authenticateWithCode(code, redirectUri, codeVerifier) {
+	const tokenData = await exchangeCode(code, redirectUri, codeVerifier);
 	const signedToken = signAlbyToken(tokenData);
 	const user = await fetchAlbyUser(tokenData.access_token);
 	return { signedToken, user };

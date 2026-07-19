@@ -6,9 +6,9 @@
 	import { setupBitcoinConnect } from '$lib/bitcoinConnect';
 	import { applyAlbyUser } from '$lib/functions/refreshAlbyToken';
 	import {
+		claimAlbyCode,
 		consumeAlbyRedirectUri,
-		hasUsedAlbyCode,
-		markAlbyCodeUsed
+		consumeAlbyCodeVerifier
 	} from '$lib/albyOAuth';
 
 	onMount(async () => {
@@ -27,10 +27,13 @@
 		if (code) {
 			window.history.replaceState(null, '', window.location.pathname);
 
-			if (!hasUsedAlbyCode(code)) {
-				markAlbyCodeUsed(code);
+			if (claimAlbyCode(code)) {
 				const redirect_uri = consumeAlbyRedirectUri(getAlbyRedirectUri($page.url));
+				const code_verifier = consumeAlbyCodeVerifier();
 				const params = new URLSearchParams({ code, redirect_uri });
+				if (code_verifier) {
+					params.set('code_verifier', code_verifier);
+				}
 				const res = await fetch(getAlbyServer() + '/api/alby/auth?' + params.toString(), {
 					credentials: 'include'
 				});

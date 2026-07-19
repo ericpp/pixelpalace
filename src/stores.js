@@ -50,18 +50,27 @@ export function getAlbyClientId() {
 	return requireEnv('PUBLIC_ALBY_CLIENT_ID');
 }
 
-export function getAlbyOAuthUrl(redirectUri) {
+export function getAlbyOAuthUrl(redirectUri, { codeChallenge } = {}) {
 	const params = new URLSearchParams({
 		client_id: getAlbyClientId(),
 		response_type: 'code',
 		redirect_uri: redirectUri,
 		scope: 'account:read balance:read payments:send invoices:read'
 	});
+	if (codeChallenge) {
+		params.set('code_challenge', codeChallenge);
+		params.set('code_challenge_method', 'S256');
+	}
 	return `https://getalby.com/oauth?${params}`;
 }
 
-/** Must match exactly between OAuth authorize and token exchange (and Alby app settings). */
+/** Must match exactly between OAuth authorize, token exchange, and Alby app settings. */
 export function getAlbyRedirectUri(url) {
+	const configured = optionalEnv('PUBLIC_ALBY_REDIRECT_URI');
+	if (configured) {
+		return configured.replace(/\/$/, '');
+	}
+
 	let redirectUri = url.origin + url.pathname;
 	if (redirectUri.endsWith('/')) {
 		redirectUri = redirectUri.slice(0, -1);
