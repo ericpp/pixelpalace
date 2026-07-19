@@ -1,8 +1,6 @@
 import { writable } from 'svelte/store';
 import { env } from '$env/dynamic/public';
 
-const defaultApiServer = 'https://api.thesplitkit.com';
-
 function requireEnv(name) {
 	const value = env[name];
 	if (!value) {
@@ -24,9 +22,9 @@ export function getRemoteServer() {
 	return '';
 }
 
-/** Alby API base. Always connects directly to PUBLIC_API_URL (never proxied). */
+/** Alby API base. Same-origin; /api/alby routes are served by SvelteKit. */
 export function getAlbyServer() {
-	return env.PUBLIC_API_URL || defaultApiServer;
+	return '';
 }
 
 export function getEventGuid() {
@@ -37,6 +35,15 @@ export function getEventGuid() {
 export function getEventSocketUrl(eventId) {
 	const id = eventId || getEventGuid();
 	return `${requireEventHost()}/event?event_id=${id}`;
+}
+
+function optionalEnv(name) {
+	const value = env[name]?.trim();
+	return value || undefined;
+}
+
+export function isAlbyEnabled() {
+	return Boolean(optionalEnv('PUBLIC_ALBY_CLIENT_ID'));
 }
 
 export function getAlbyClientId() {
@@ -51,11 +58,6 @@ export function getAlbyOAuthUrl(redirectUri) {
 		scope: 'account:read balance:read payments:send invoices:read'
 	});
 	return `https://getalby.com/oauth?${params}`;
-}
-
-function optionalEnv(name) {
-	const value = env[name]?.trim();
-	return value || undefined;
 }
 
 function getLnurlCallbackTemplate() {

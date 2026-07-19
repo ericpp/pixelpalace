@@ -14,6 +14,7 @@
 
 	import sendBoost from '$lib/functions/sendBoost';
 	import sendBoostWallet from '$lib/functions/sendBoostWallet';
+	import refreshAlbyToken from '$lib/functions/refreshAlbyToken';
 	import { getConnectedProvider, refreshConnectedWalletBalance } from '$lib/bitcoinConnect';
 
 	let senderName = 'anonymous';
@@ -154,6 +155,7 @@
 			splitStatuses = {};
 			if (isMobile) activeScreen = 'splits';
 			try {
+				await refreshAlbyToken();
 				await sendBoost({
 					block: broadcastingBlock,
 					satAmount: amount,

@@ -6,13 +6,14 @@
 
 	import { page } from '$app/stores';
 
-	import { getAlbyOAuthUrl, user, wallet } from '$/stores';
+	import { getAlbyOAuthUrl, isAlbyEnabled, user, wallet } from '$/stores';
 	import { connectWallet } from '$lib/bitcoinConnect';
 
 	let connectingWallet = false;
 
+	const albyEnabled = isAlbyEnabled();
 	$: redirectUri = $page.url.origin + $page.url.pathname;
-	$: redirectUrl = getAlbyOAuthUrl(redirectUri);
+	$: redirectUrl = albyEnabled ? getAlbyOAuthUrl(redirectUri) : '';
 
 	async function handleWalletClick() {
 		if ($wallet.connected) {
@@ -37,17 +38,19 @@
 		<h1>How would you like to boost?</h1>
 
 		<div class="buttons">
-			<button
-				on:click={() => {
-					if ($user.loggedIn) {
-						paymentType = 'alby';
-					} else {
-						window.location.href = redirectUrl;
-					}
-				}}
-			>
-				Alby
-			</button>
+			{#if albyEnabled}
+				<button
+					on:click={() => {
+						if ($user.loggedIn) {
+							paymentType = 'alby';
+						} else {
+							window.location.href = redirectUrl;
+						}
+					}}
+				>
+					Alby
+				</button>
+			{/if}
 			<button
 				on:click={() => {
 					paymentType = 'qr';
