@@ -1,7 +1,8 @@
 import { env } from '$env/dynamic/public';
 import { error } from '@sveltejs/kit';
+import type { RequestHandler } from './$types';
 
-function getTargetBase() {
+function getTargetBase(): string {
 	const host = env.PUBLIC_EVENT_HOST?.replace(/\/$/, '');
 	if (!host) {
 		error(500, 'PUBLIC_EVENT_HOST is not configured');
@@ -9,7 +10,11 @@ function getTargetBase() {
 	return host;
 }
 
-async function proxy({ params, request, url }) {
+type Params = {
+	path: string;
+};
+
+const proxy: RequestHandler = async ({ params, request, url }: { params: Params; request: Request; url: URL }) => {
 	const target = new URL(`${getTargetBase()}/api/sk/${params.path}`);
 	url.searchParams.forEach((value, key) => {
 		target.searchParams.set(key, value);
@@ -21,8 +26,7 @@ async function proxy({ params, request, url }) {
 	const accept = request.headers.get('accept');
 	if (accept) headers.set('accept', accept);
 
-	/** @type {RequestInit} */
-	const init = {
+	const init: RequestInit = {
 		method: request.method,
 		headers
 	};
@@ -42,7 +46,7 @@ async function proxy({ params, request, url }) {
 		statusText: upstream.statusText,
 		headers: responseHeaders
 	});
-}
+};
 
 export const GET = proxy;
 export const POST = proxy;

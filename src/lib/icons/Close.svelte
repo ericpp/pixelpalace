@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
 	export let size = '1em';
 	export let width = size;
 	export let height = size;

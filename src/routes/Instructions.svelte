@@ -1,4 +1,4 @@
-<script>
+<script lang="ts">
 	import { onMount } from 'svelte';
 	import Close from '$lib/icons/Close.svelte';
 
@@ -6,7 +6,7 @@
 	export let showInstructions = false;
 
 	onMount(() => {
-		const handleKeyDown = (event) => {
+		const handleKeyDown = (event: KeyboardEvent) => {
 			if (event.key === 'Escape') {
 				onClose();
 			}
@@ -24,7 +24,13 @@
 	}
 </script>
 
-<blurred-background on:mousedown|self={onClose} on:touchend|self={onClose}>
+<blurred-background
+	role="button"
+	tabindex="-1"
+	aria-label="Close"
+	on:mousedown|self={onClose}
+	on:touchend|self={onClose}
+>
 	<modal style="--aspect-ratio: {950 / 1220};">
 		<button class="close" on:click={onClose}>
 			<Close size="24" />
@@ -149,9 +155,6 @@
 			border-radius: 0;
 		}
 
-		fade-bottom {
-			display: none;
-		}
 		div {
 			background-image: url('/list-bg-mobile.webp');
 			height: 100vh;

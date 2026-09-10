@@ -1,19 +1,23 @@
-<script>
+<script lang="ts">
 	import Video from '../Video.svelte';
 	import BoostBoard from '../BoostBoard.svelte';
 	import Boost from '../Boost.svelte';
 	import Chat from '../Chat.svelte';
 	import Instructions from '../Instructions.svelte';
-	let currentScreen = 'video';
 	import { mainSettings, getDefaultBackgroundUrl } from '$/stores';
+	import type { Block } from '$lib/types';
 
-	function changeScreen(screenName) {
+	type ScreenName = 'video' | 'boostBoard' | 'chat';
+
+	let currentScreen: ScreenName = 'video';
+
+	function changeScreen(screenName: ScreenName) {
 		currentScreen = screenName;
 	}
 
-	export let guid;
-	export let broadcastingBlock;
-	export let throwConfetti;
+	export let guid: string;
+	export let broadcastingBlock: Block;
+	export let throwConfetti: (amount: number) => void;
 	let showInstructions = false;
 </script>
 
@@ -23,9 +27,9 @@
 	src={$mainSettings?.liveBackgroundUrl ? $mainSettings?.liveBackgroundUrl : getDefaultBackgroundUrl()}
 />
 <nav>
-	<button on:click={changeScreen.bind(this, 'boostBoard')}>Boost Board</button>
-	<button on:click={changeScreen.bind(this, 'video')}>Video</button>
-	<button on:click={changeScreen.bind(this, 'chat')}>Chat</button>
+	<button on:click={() => changeScreen('boostBoard')}>Boost Board</button>
+	<button on:click={() => changeScreen('video')}>Video</button>
+	<button on:click={() => changeScreen('chat')}>Chat</button>
 </nav>
 
 <container>
@@ -37,7 +41,7 @@
 		<div class="boost-board-container">
 			<BoostBoard />
 		</div>
-		<Boost isMobile={true} {guid} {broadcastingBlock} bind:showInstructions {throwConfetti} />
+		<Boost isMobile={true} {broadcastingBlock} {throwConfetti} />
 	</div>
 	<div class="chat" class:show={currentScreen === 'chat'}>
 		<Chat />

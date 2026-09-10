@@ -1,13 +1,14 @@
-<script>
+<script lang="ts">
 	import Modal from './Modal.svelte';
 	import { onMount } from 'svelte';
 	import { getVenmoUrl } from '$/stores';
+	import type { PaymentType } from '$lib/types';
 
-	export let showModal;
-	export let paymentType;
+	export let showModal: boolean;
+	export let paymentType: PaymentType | undefined;
 
 	let isDesktop = true;
-	let venmoWindow;
+	let venmoWindow: Window | null = null;
 
 	function openVenmo() {
 		const url = getVenmoUrl();

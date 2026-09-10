@@ -1,9 +1,9 @@
-import { json } from '@sveltejs/kit';
-import { getSessionFromCookie, refreshSession } from '$lib/server/alby/session.js';
-import { getAwtCookie, setAwtCookie } from '$lib/server/alby/cookies.js';
+import { json, type Cookies } from '@sveltejs/kit';
+import { getSessionFromCookie, refreshSession } from '$lib/server/alby/session';
+import { getAwtCookie, setAwtCookie } from '$lib/server/alby/cookies';
+import type { RequestHandler } from './$types';
 
-/** @type {import('./$types').RequestHandler} */
-export async function GET({ cookies }) {
+export const GET: RequestHandler = async ({ cookies }: { cookies: Cookies }) => {
 	const session = getSessionFromCookie(getAwtCookie(cookies));
 
 	if (!session?.refresh_token) {
@@ -18,4 +18,4 @@ export async function GET({ cookies }) {
 		console.log('alby refresh:', err);
 		return json({ message: 'Server Error' }, { status: 500 });
 	}
-}
+};

@@ -1,17 +1,18 @@
-<script>
+<script lang="ts">
 	import { onMount } from 'svelte';
 	import Close from '$lib/icons/Close.svelte';
 	import { disconnectWallet, releaseWalletSession } from '$lib/bitcoinConnect';
+	import type { PaymentType } from '$lib/types';
 
 	export let closeModal = () => {};
 	export let showModal = false;
-	export let imgSrc;
-	export let width;
-	export let height;
-	export let backgroundColor;
-	export let closeColor;
-	export let showNewPaymentType;
-	export let paymentType;
+	export let imgSrc: string | undefined = undefined;
+	export let width: string | undefined = undefined;
+	export let height: string | undefined = undefined;
+	export let backgroundColor: string | undefined = undefined;
+	export let closeColor: string | undefined = undefined;
+	export let showNewPaymentType = false;
+	export let paymentType: PaymentType | undefined = undefined;
 
 	async function handleDisconnectWallet() {
 		await disconnectWallet();
@@ -20,7 +21,7 @@
 	}
 
 	onMount(() => {
-		const handleKeyDown = (event) => {
+		const handleKeyDown = (event: KeyboardEvent) => {
 			if (event.key === 'Escape') {
 				onClose();
 			}
@@ -38,7 +39,13 @@
 	}
 </script>
 
-<blurred-background on:mousedown|self={onClose} on:touchend|self={onClose}>
+<blurred-background
+	role="button"
+	tabindex="-1"
+	aria-label="Close"
+	on:mousedown|self={onClose}
+	on:touchend|self={onClose}
+>
 	<modal
 		style={`
 			${

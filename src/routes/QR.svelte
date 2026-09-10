@@ -1,16 +1,17 @@
-<script>
-	import QRCode from 'qrcode';
+<script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
+	import { getLightningAddress } from '$/stores';
 
-	let qrCodeCanvas;
-	let container;
-	export let code = 'tsk-58eb81f8-caeb-4c77-a326-36e406207fe0@boostbeach.xyz';
+	let qrCodeCanvas: HTMLCanvasElement | undefined;
+	let container: HTMLButtonElement | undefined;
+	export let code = getLightningAddress() ?? '';
 	export let imgSrc = '';
-	let observer;
+	let observer: ResizeObserver | undefined;
 
-	function generateQRCode() {
+	async function generateQRCode() {
 		if (!qrCodeCanvas || !container) return;
 
+		const { default: QRCode } = await import('qrcode');
 		const size = container.clientWidth;
 
 		QRCode.toCanvas(qrCodeCanvas, code, {
@@ -43,7 +44,7 @@
 	{#if imgSrc}
 		<img src="./qrbg.png" alt="QR Background" />
 	{/if}
-	<canvas bind:this={qrCodeCanvas} />
+	<canvas bind:this={qrCodeCanvas}></canvas>
 	<p>- click invoice to copy to clipboard -</p>
 </button>
 

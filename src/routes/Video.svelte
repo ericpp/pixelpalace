@@ -1,14 +1,18 @@
-<script>
-	import Hls from 'hls.js';
-	import io from 'socket.io-client';
+<script lang="ts">
+	import type Hls from 'hls.js';
 	import { onMount } from 'svelte';
 
-	import { mainSettings, getEventGuid, getEventSocketUrl, liveMode, liveEnclosure } from '$/stores';
+	import { mainSettings, getEventGuid, getEventSocketUrl } from '$/stores';
+	import { loadHls } from '$lib/hls';
+	import { connectEventSocket } from '$lib/socket';
+	import type { Block } from '$lib/types';
 
 	export let guid = getEventGuid();
 
-	let player;
-	let block;
+	let player: HTMLVideoElement | undefined;
+	let block: Block | undefined;
+	let hls: Hls | undefined;
+	let sourceToken = 0;
 	$: sourceVideo = $mainSettings?.liveEnclosure || '';
 	// sourceVideo = 'https://listen.noagendastream.com/noagenda';
 
@@ -16,54 +20,69 @@
 
 	$: console.log($mainSettings);
 
-	function setSource(src, player) {
-		console.log(player);
+	async function setSource(src: string, el?: HTMLVideoElement) {
+		console.log(el);
 		console.log(src);
-		if (player && src) {
-			// src =
-			// 	'https://noagendatube.com/static/streaming-playlists/hls/54ebb881-8581-4b16-b3ba-04dcac230fd4/master.m3u8';
+		if (!el || !src) return;
 
-			// src = 'https://content.jwplatform.com/manifests/yp34SRmf.m3u8';
-			console.log(src);
-			if (src.includes('.m3u8')) {
-				if (player.canPlayType('application/vnd.apple.mpegurl')) {
-					player.src = src;
-					//
-					// If no native HLS support, check if HLS.js is supported
-					//
-				} else if (Hls.isSupported()) {
-					console.log('hello hls.js!');
-					var hls = new Hls();
-					// bind them together
-					hls.attachMedia(player);
-					// MEDIA_ATTACHED event is fired by hls object once MediaSource is ready
-					hls.on(Hls.Events.MEDIA_ATTACHED, function () {
-						console.log('video and hls.js are now bound together !');
-						hls.loadSource(src);
-						hls.on(Hls.Events.MANIFEST_PARSED, function (event, data) {
-							console.log('manifest loaded, found ' + data.levels.length + ' quality level');
-							player.play();
-						});
-					});
-				}
-			} else {
-				player.src = src;
-				player.play();
+		const token = ++sourceToken;
+		hls?.destroy();
+		hls = undefined;
+
+		// src =
+		// 	'https://noagendatube.com/static/streaming-playlists/hls/54ebb881-8581-4b16-b3ba-04dcac230fd4/master.m3u8';
+
+		// src = 'https://content.jwplatform.com/manifests/yp34SRmf.m3u8';
+		console.log(src);
+		if (src.includes('.m3u8')) {
+			if (el.canPlayType('application/vnd.apple.mpegurl')) {
+				el.src = src;
+				return;
 			}
+
+			const HlsPlayer = await loadHls();
+			if (token !== sourceToken || !HlsPlayer.isSupported()) return;
+
+			console.log('hello hls.js!');
+			const instance = new HlsPlayer();
+			hls = instance;
+			instance.attachMedia(el);
+			instance.on(HlsPlayer.Events.MEDIA_ATTACHED, function () {
+				if (token !== sourceToken) return;
+				console.log('video and hls.js are now bound together !');
+				instance.loadSource(src);
+				instance.on(HlsPlayer.Events.MANIFEST_PARSED, function (_event, data) {
+					console.log('manifest loaded, found ' + data.levels.length + ' quality level');
+					el.play();
+				});
+			});
+			return;
 		}
+
+		el.src = src;
+		el.play();
 	}
 
-	onMount(async () => {
+	onMount(() => {
 		const url = getEventSocketUrl(guid);
-		const liveItemSocket = io.connect(url);
+		const socketPromise = connectEventSocket(url);
 
-		liveItemSocket.on('remoteValue', function (data) {
-			block = data;
+		socketPromise.then((liveItemSocket) => {
+			liveItemSocket.on('remoteValue', function (data: Block) {
+				block = data;
+			});
+			liveItemSocket.on('playerPause', function (data: unknown) {
+				// You will need to adjust this part based on the actual format of the data sent by the server
+				console.log(data);
+			});
 		});
-		liveItemSocket.on('playerPause', function (data) {
-			// You will need to adjust this part based on the actual format of the data sent by the server
-			console.log(data);
-		});
+
+		return () => {
+			sourceToken += 1;
+			hls?.destroy();
+			hls = undefined;
+			socketPromise.then((socket) => socket.disconnect());
+		};
 	});
 
 	$: showLiveChapters = $mainSettings?.liveStreamType === 'audio' || !$mainSettings?.liveStreamType;
@@ -87,7 +106,7 @@
 			controls
 			preload="metadata"
 			bind:this={player}
-		/>
+		></video>
 	</div>
 </container>
 

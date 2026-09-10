@@ -1,4 +1,16 @@
-export default async function sendKeysend({ accessToken, recipient }) {
+import type { BoostPayment, PaymentAttemptResult } from '$lib/types';
+
+function errorMessage(error: unknown): string {
+	return error instanceof Error ? error.message : String(error);
+}
+
+export default async function sendKeysend({
+	accessToken,
+	recipient
+}: {
+	accessToken: string;
+	recipient: BoostPayment;
+}): Promise<PaymentAttemptResult> {
 	try {
 		if (!recipient.amount) {
 			return {
@@ -26,7 +38,8 @@ export default async function sendKeysend({ accessToken, recipient }) {
 		const paymentData = await res.json();
 		return { success: true, recipient, paymentData };
 	} catch (error) {
-		console.log('Keysend Payment Error:', error.message || error);
-		return { success: false, recipient, err: error.message || String(error) };
+		const message = errorMessage(error);
+		console.log('Keysend Payment Error:', message);
+		return { success: false, recipient, err: message };
 	}
 }

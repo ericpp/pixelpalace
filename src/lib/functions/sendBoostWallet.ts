@@ -1,8 +1,12 @@
+import type { Block, BoostPayment, PaymentResult, WalletProvider } from '$lib/types';
 import buildBoostPayments from './buildBoostPayments';
 
 const KEYSEND_PUBKEY = /^[0-9a-fA-F]{66}$/;
 
-async function resolveKeysendTarget(address) {
+async function resolveKeysendTarget(address: string): Promise<{
+	destination: string;
+	extraCustomRecords: Record<string, string>;
+}> {
 	if (!address.includes('@')) {
 		return { destination: address, extraCustomRecords: {} };
 	}
@@ -18,20 +22,26 @@ async function resolveKeysendTarget(address) {
 		throw new Error(`Keysend lookup failed for ${address}: ${metaRes.status}`);
 	}
 
-	const info = await metaRes.json();
+	const info = (await metaRes.json()) as {
+		status?: string;
+		pubkey?: string;
+		customData?: Array<{ customKey?: string | number; customValue?: string }>;
+	};
 	if (info.status !== 'OK' || !info.pubkey) {
 		throw new Error(`Keysend metadata unavailable for ${address}`);
 	}
 
-	const extraCustomRecords = {};
-	if (info.customData?.[0]?.customKey != null) {
-		extraCustomRecords[String(info.customData[0].customKey)] = info.customData[0].customValue;
+	const extraCustomRecords: Record<string, string> = {};
+	if (info.customData?.[0]?.customKey != null && info.customData[0].customValue != null) {
+		extraCustomRecords[String(info.customData[0].customKey)] = String(
+			info.customData[0].customValue
+		);
 	}
 
 	return { destination: info.pubkey, extraCustomRecords };
 }
 
-async function fetchLnAddressInvoice(address, amountMsats) {
+async function fetchLnAddressInvoice(address: string, amountMsats: number): Promise<string> {
 	const at = address.lastIndexOf('@');
 	const user = address.slice(0, at);
 	const domain = address.slice(at + 1);
@@ -39,7 +49,7 @@ async function fetchLnAddressInvoice(address, amountMsats) {
 	if (!metaRes.ok) {
 		throw new Error(`LNURL metadata fetch failed: ${metaRes.status}`);
 	}
-	const meta = await metaRes.json();
+	const meta = (await metaRes.json()) as { callback?: string };
 	if (!meta.callback) {
 		throw new Error('LNURL metadata missing callback');
 	}
@@ -49,14 +59,14 @@ async function fetchLnAddressInvoice(address, amountMsats) {
 	if (!invoiceRes.ok) {
 		throw new Error(`LNURL invoice fetch failed: ${invoiceRes.status}`);
 	}
-	const invoice = await invoiceRes.json();
+	const invoice = (await invoiceRes.json()) as { pr?: string };
 	if (!invoice.pr) {
 		throw new Error('LNURL invoice missing payment request');
 	}
 	return invoice.pr;
 }
 
-async function payDestination(provider, payment) {
+async function payDestination(provider: WalletProvider, payment: BoostPayment): Promise<unknown> {
 	const { type, destination, amount, customRecords } = payment;
 	const shouldKeysend =
 		type === 'node' || KEYSEND_PUBKEY.test(destination) || destination.includes('@');
@@ -99,7 +109,15 @@ export default async function sendBoostWallet({
 	senderName,
 	isDefault,
 	onPaymentResult
-}) {
+}: {
+	provider: WalletProvider | null | undefined;
+	block: Block;
+	satAmount: number;
+	boostagram: string;
+	senderName: string;
+	isDefault?: boolean;
+	onPaymentResult?: (result: PaymentResult) => void;
+}): Promise<{ payments: number; successCount: number; failureCount: number }> {
 	if (!provider) {
 		throw new Error('Wallet is not connected');
 	}

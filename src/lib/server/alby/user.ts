@@ -1,4 +1,6 @@
-export async function fetchAlbyUser(accessToken) {
+import type { AlbyUser } from '$lib/types';
+
+export async function fetchAlbyUser(accessToken: string): Promise<AlbyUser> {
 	const headers = { Authorization: `Bearer ${accessToken}` };
 
 	const [accountRes, balanceRes] = await Promise.all([
@@ -13,8 +15,8 @@ export async function fetchAlbyUser(accessToken) {
 		throw new Error('Failed to fetch Alby user data');
 	}
 
-	const account = await accountRes.json();
-	const balance = await balanceRes.json();
+	const account = (await accountRes.json()) as AlbyUser;
+	const balance = (await balanceRes.json()) as AlbyUser;
 
 	return { ...account, ...balance };
 }

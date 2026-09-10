@@ -1,12 +1,11 @@
 import { browser } from '$app/environment';
 import { getAppName, wallet } from '$/stores';
+import type { WalletProvider } from '$lib/types';
 
 let initialized = false;
 let walletSessionLocked = false;
-/** @type {import('@getalby/bitcoin-connect').WebLNProvider | null} */
-let connectedProvider = null;
-/** @type {Promise<typeof import('@getalby/bitcoin-connect')> | null} */
-let modulePromise = null;
+let connectedProvider: WalletProvider | null = null;
+let modulePromise: Promise<typeof import('@getalby/bitcoin-connect')> | null = null;
 
 function loadBitcoinConnect() {
 	if (!browser) return null;
@@ -16,7 +15,7 @@ function loadBitcoinConnect() {
 	return modulePromise;
 }
 
-async function refreshWalletBalance(provider) {
+async function refreshWalletBalance(provider: WalletProvider): Promise<void> {
 	wallet.update((state) => ({ ...state, connected: true, provider }));
 
 	if (!provider?.getBalance) return;
@@ -29,12 +28,12 @@ async function refreshWalletBalance(provider) {
 	}
 }
 
-function setConnectedProvider(provider) {
+function setConnectedProvider(provider: WalletProvider | null): void {
 	connectedProvider = provider;
 	wallet.update((state) => ({ ...state, provider, connected: !!provider }));
 }
 
-export async function setupBitcoinConnect() {
+export async function setupBitcoinConnect(): Promise<void> {
 	if (!browser || initialized) return;
 
 	const bc = await loadBitcoinConnect();
@@ -50,21 +49,24 @@ export async function setupBitcoinConnect() {
 		if (walletSessionLocked && connectedProvider) {
 			return;
 		}
-		setConnectedProvider(provider);
-		refreshWalletBalance(provider);
+		setConnectedProvider(provider as WalletProvider);
+		refreshWalletBalance(provider as WalletProvider);
 	});
 
 	initialized = true;
 }
 
 /** Open Bitcoin Connect and wait for an NWC wallet before continuing. */
-export async function connectWallet() {
+export async function connectWallet(): Promise<WalletProvider> {
 	if (!browser) {
 		throw new Error('Wallet connection requires a browser');
 	}
 
 	await setupBitcoinConnect();
 	const bc = await loadBitcoinConnect();
+	if (!bc) {
+		throw new Error('Wallet connection requires a browser');
+	}
 
 	// Keep an already-linked NWC session when returning via Change Payment Type.
 	if (connectedProvider) {
@@ -85,22 +87,22 @@ export async function connectWallet() {
 		setConnectedProvider(null);
 	}
 
-	const provider = await bc.requestProvider();
+	const provider = (await bc.requestProvider()) as WalletProvider;
 	walletSessionLocked = true;
 	setConnectedProvider(provider);
 	await refreshWalletBalance(provider);
 	return provider;
 }
 
-export function getConnectedProvider() {
+export function getConnectedProvider(): WalletProvider | null {
 	return connectedProvider;
 }
 
-export function releaseWalletSession() {
+export function releaseWalletSession(): void {
 	walletSessionLocked = false;
 }
 
-export async function disconnectWallet() {
+export async function disconnectWallet(): Promise<void> {
 	if (!browser) return;
 
 	await setupBitcoinConnect();
@@ -112,7 +114,7 @@ export async function disconnectWallet() {
 	wallet.set({ connected: false, balance: null, provider: null });
 }
 
-export async function refreshConnectedWalletBalance() {
+export async function refreshConnectedWalletBalance(): Promise<void> {
 	if (!connectedProvider) return;
 	await refreshWalletBalance(connectedProvider);
 }

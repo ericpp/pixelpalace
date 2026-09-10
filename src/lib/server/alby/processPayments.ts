@@ -1,7 +1,11 @@
-import sendKeysend from './sendKeysend.js';
-import sendLnurl from './sendLnurl.js';
+import sendKeysend from './sendKeysend';
+import sendLnurl from './sendLnurl';
+import type { BoostPayment, PaymentAttemptResult } from '$lib/types';
 
-export default async function processPayments(accessToken, splits) {
+export default async function processPayments(
+	accessToken: string,
+	splits: BoostPayment[]
+): Promise<PaymentAttemptResult[]> {
 	const paymentAttempts = splits.map((recipient) => {
 		if (recipient?.type === 'node') {
 			return sendKeysend({ accessToken, recipient });

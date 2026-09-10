@@ -1,8 +1,8 @@
-<script>
+<script lang="ts">
 	import './styles.css';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
-	import { getAlbyServer, getAlbyRedirectUri, isAlbyEnabled, user, albyReady, userReady, loaded } from '$/stores';
+	import { getAlbyServer, getAlbyRedirectUri, isAlbyEnabled, albyReady, userReady, loaded } from '$/stores';
 	import { setupBitcoinConnect } from '$lib/bitcoinConnect';
 	import { applyAlbyUser } from '$lib/functions/refreshAlbyToken';
 	import {

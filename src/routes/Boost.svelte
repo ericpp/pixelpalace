@@ -1,14 +1,14 @@
-<script>
+<script lang="ts">
 	import BoostPage from './BoostPage.svelte';
 	import Venmo from './Venmo.svelte';
 	import PaymentSelector from './PaymentSelector.svelte';
+	import type { Block, PaymentType } from '$lib/types';
 
-	export let broadcastingBlock;
-	export let showInstructions;
-	export let throwConfetti;
-	export let isMobile;
+	export let broadcastingBlock: Block;
+	export let throwConfetti: (amount: number) => void;
+	export let isMobile = false;
 	let showModal = false;
-	let paymentType;
+	let paymentType: PaymentType | undefined;
 
 	$: console.log(paymentType);
 	$: console.log(showModal);

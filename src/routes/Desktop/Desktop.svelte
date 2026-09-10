@@ -1,13 +1,15 @@
-<script>
+<script lang="ts">
 	import Boost from '../Boost.svelte';
 	import Video from '../Video.svelte';
 	import Chat from '../Chat.svelte';
 	import BoostBoard from '../BoostBoard.svelte';
 	import Instructions from '../Instructions.svelte';
 	import { mainSettings, getDefaultBackgroundUrl } from '$/stores';
-	export let guid;
-	export let broadcastingBlock;
-	export let throwConfetti;
+	import type { Block } from '$lib/types';
+
+	export let guid: string;
+	export let broadcastingBlock: Block;
+	export let throwConfetti: (amount: number) => void;
 	let showInstructions = false;
 </script>
 
@@ -20,7 +22,7 @@
 <container>
 	<div class="middle">
 		<BoostBoard />
-		<Boost {guid} {broadcastingBlock} bind:showInstructions {throwConfetti} />
+		<Boost {broadcastingBlock} {throwConfetti} />
 	</div>
 
 	<Video {guid} />

@@ -1,8 +1,9 @@
-import { getAlbyCredentials } from './credentials.js';
+import { getAlbyCredentials } from './credentials';
+import type { AlbyTokenData } from '$lib/types';
 
 const TOKEN_URL = 'https://api.getalby.com/oauth/token';
 
-async function requestToken(body) {
+async function requestToken(body: Record<string, string>): Promise<AlbyTokenData> {
 	const { clientId, clientSecret } = getAlbyCredentials();
 	const params = new URLSearchParams({
 		...body,
@@ -31,12 +32,15 @@ async function requestToken(body) {
 		throw new Error(`Alby token request failed: ${res.status}`);
 	}
 
-	return res.json();
+	return res.json() as Promise<AlbyTokenData>;
 }
 
-export function exchangeCode(code, redirectUri, codeVerifier) {
-	/** @type {Record<string, string>} */
-	const body = {
+export function exchangeCode(
+	code: string,
+	redirectUri: string,
+	codeVerifier?: string
+): Promise<AlbyTokenData> {
+	const body: Record<string, string> = {
 		code,
 		redirect_uri: redirectUri,
 		grant_type: 'authorization_code'
@@ -47,7 +51,7 @@ export function exchangeCode(code, redirectUri, codeVerifier) {
 	return requestToken(body);
 }
 
-export function refreshAccessToken(refreshToken) {
+export function refreshAccessToken(refreshToken: string): Promise<AlbyTokenData> {
 	return requestToken({
 		refresh_token: refreshToken,
 		grant_type: 'refresh_token'

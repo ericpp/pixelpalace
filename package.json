@@ -5,7 +5,9 @@
 	"scripts": {
 		"dev": "vite dev --host --port 3001",
 		"build": "vite build",
-		"preview": "vite preview --host --port 3001"
+		"preview": "vite preview --host --port 3001",
+		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch"
 	},
 	"devDependencies": {
 		"@sveltejs/adapter-auto": "^3.0.0",
@@ -13,7 +15,13 @@
 		"@sveltejs/adapter-vercel": "^6.3.3",
 		"@sveltejs/kit": "^2.0.0",
 		"@sveltejs/vite-plugin-svelte": "^5.0.0",
+		"@types/jsonwebtoken": "^9.0.10",
+		"@types/node": "^22.15.3",
+		"@types/qrcode": "^1.5.5",
 		"svelte": "^5.0.0",
+		"svelte-check": "^4.2.1",
+		"tslib": "^2.8.1",
+		"typescript": "^5.8.3",
 		"vite": "^6.0.0"
 	},
 	"type": "module",

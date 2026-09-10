@@ -1,16 +1,17 @@
-<script>
-	import io from 'socket.io-client';
+<script lang="ts">
 	import { onMount } from 'svelte';
 	import Modal from './Modal.svelte';
 	import QR from './QR.svelte';
+	import { connectEventSocket } from '$lib/socket';
 
 	import { user, wallet, getEventGuid, getEventSocketUrl, fetchLnurlInvoice, getBtcPriceUrl } from '$/stores';
+	import type { Block, PaymentType, SplitStatus } from '$lib/types';
 
-	export let showModal;
-	export let broadcastingBlock;
-	export let paymentType;
-	export let isMobile;
-	export let throwConfetti;
+	export let showModal: boolean;
+	export let broadcastingBlock: Block;
+	export let paymentType: PaymentType;
+	export let isMobile = false;
+	export let throwConfetti: (amount: number) => void;
 
 	import sendBoost from '$lib/functions/sendBoost';
 	import sendBoostWallet from '$lib/functions/sendBoostWallet';
@@ -23,11 +24,10 @@
 	let amount = 1;
 	let btcPrice = 250000;
 	let showQR = false;
-	let invoice;
-	let activeScreen = 'boost';
+	let invoice: string | undefined;
+	let activeScreen: 'boost' | 'splits' = 'boost';
 	let paying = false;
-	/** @type {Record<number, 'success' | 'failed' | 'pending'>} */
-	let splitStatuses = {};
+	let splitStatuses: Record<number, SplitStatus> = {};
 	$: console.log(broadcastingBlock);
 
 	onMount(() => {
@@ -35,47 +35,47 @@
 		senderName = localStorage.getItem('senderName') || 'anonymous';
 
 		const url = getEventSocketUrl(broadcastingBlock.eventGuid || getEventGuid());
-		const socket = io.connect(url);
+		const socketPromise = connectEventSocket(url);
 
-		socket.on('connect', () => {
-			console.log(broadcastingBlock.eventGuid);
-			console.log('Connected with clientId:', socket.id);
+		socketPromise.then((socket) => {
+			socket.on('connect', () => {
+				console.log(broadcastingBlock.eventGuid);
+				console.log('Connected with clientId:', socket.id);
+			});
+
+			socket.on('invoiceVerify', function (data: string) {
+				console.log('dude');
+				console.log(data);
+
+				if (invoice === data) {
+					throwConfetti(amount);
+					boostagram = '';
+					showQR = false;
+					showModal = false;
+				}
+			});
 		});
 
-		socket.on('invoiceVerify', function (data) {
-			console.log('dude');
-			console.log(data);
-
-			if (invoice === data) {
-				throwConfetti(amount);
-				boostagram = '';
-				showQR = false;
-				showModal = false;
-			}
-		});
-
-		// return cleanup function
 		return () => {
-			socket.disconnect();
+			socketPromise.then((socket) => socket.disconnect());
 		};
 	});
 
 	async function fetchConversionRate() {
 		let res = await fetch(getBtcPriceUrl());
 
-		btcPrice = await res.text();
+		btcPrice = Number(await res.text()) || 250000;
 	}
 
-	function satsToDollars(satAmount) {
-		let dollars = btcPrice * 10000;
-		let amount = Math.round((satAmount / dollars) * 100) / 100;
-		amount = amount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-		return amount;
+	function satsToDollars(satAmount: number): string {
+		const dollars = btcPrice * 10000;
+		const usd = Math.round((satAmount / dollars) * 100) / 100;
+		return usd.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 	}
 
 	function maxBoostAmount() {
 		if (paymentType === 'alby' && $user.loggedIn) {
-			return Math.floor(Math.min($user.balance * 0.99, 5000000));
+			return Math.floor(Math.min(($user.balance ?? 0) * 0.99, 5000000));
 		}
 		if (paymentType === 'wallet' && $wallet.balance != null) {
 			return Math.floor(Math.min($wallet.balance * 0.99, 5000000));
@@ -131,6 +131,7 @@
 					senderName,
 					isDefault: fromIndex,
 					onPaymentResult: ({ destIndex, status }) => {
+						if (destIndex == null) return;
 						splitStatuses = { ...splitStatuses, [destIndex]: status };
 					}
 				});
@@ -171,7 +172,9 @@
 				await new Promise((resolve) => setTimeout(resolve, 800));
 				showModal = false;
 				splitStatuses = {};
-				$user.balance -= amount;
+				if ($user.balance != null) {
+					$user.balance -= amount;
+				}
 			} catch (err) {
 				console.log(err);
 				const destinations = broadcastingBlock?.value?.destinations || [];
@@ -184,15 +187,16 @@
 
 	$: console.log(broadcastingBlock);
 
-	function handleKeyDown(event) {
+	function handleKeyDown(event: KeyboardEvent) {
 		const keyValue = event.key;
 		if (keyValue === '.' || keyValue === 'e' || keyValue === 'E') {
 			event.preventDefault();
 		}
 	}
 
-	function enforceMinMax(event) {
-		let value = parseInt(event.target.value, 10) || 1;
+	function enforceMinMax(event: FocusEvent) {
+		const target = event.target as HTMLInputElement;
+		let value = parseInt(target.value, 10) || 1;
 		if (value <= 1) {
 			amount = 1;
 		} else if (value > maxBoostAmount()) {
@@ -202,7 +206,7 @@
 		}
 	}
 
-	function setAmount(value) {
+	function setAmount(value: number) {
 		amount = value;
 	}
 
@@ -249,7 +253,7 @@
 				<label>
 					<input type="text" bind:value={senderName} placeholder="Enter your name here..." />
 				</label>
-				<textarea bind:value={boostagram} rows="4" placeholder="Enter your message here..." />
+				<textarea bind:value={boostagram} rows="4" placeholder="Enter your message here..."></textarea>
 				<amount-text>
 					<h3>Amount</h3>
 					{#if paymentType === 'alby' && $user.loggedIn}
@@ -279,7 +283,7 @@
 					<p>Split</p>
 				</header>
 				<ul>
-					{#each broadcastingBlock.value.destinations || [] as person, i}
+					{#each broadcastingBlock.value?.destinations || [] as person, i}
 						<li>
 							<p class="split-name">
 								<span
@@ -541,6 +545,7 @@
 	}
 	input[type='number'] {
 		-moz-appearance: textfield;
+		appearance: textfield;
 	}
 	label {
 		display: flex;

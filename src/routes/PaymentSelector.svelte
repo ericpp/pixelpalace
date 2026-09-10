@@ -1,8 +1,9 @@
-<script>
+<script lang="ts">
 	import Modal from './Modal.svelte';
+	import type { PaymentType } from '$lib/types';
 
-	export let showModal;
-	export let paymentType;
+	export let showModal: boolean;
+	export let paymentType: PaymentType | undefined;
 
 	import { page } from '$app/stores';
 

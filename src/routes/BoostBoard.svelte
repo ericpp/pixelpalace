@@ -1,9 +1,9 @@
-<script>
+<script lang="ts">
 	import { mainSettings } from '$/stores';
 </script>
 
 <div class="iframe-container boost-board">
-	<iframe src={$mainSettings?.boostBoard || ''} />
+	<iframe title="Boost board" src={$mainSettings?.boostBoard || ''}></iframe>
 </div>
 
 <style>

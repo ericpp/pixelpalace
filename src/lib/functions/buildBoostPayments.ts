@@ -1,11 +1,13 @@
-function getBaseRecord(block, satAmount, boostagram, senderName) {
+import type { Block, BoostPayment, BuildBoostPaymentsArgs, Destination } from '$lib/types';
+
+function getBaseRecord(block: Block, satAmount: number, boostagram: string, senderName: string) {
 	return {
 		podcast: block.title,
 		action: 'boost',
 		app_name: 'The Split Kit',
 		value_msat: 0,
 		value_msat_total: satAmount * 1000,
-		name: undefined,
+		name: undefined as string | undefined,
 		message: boostagram,
 		sender_name: senderName || 'anonymous ',
 		remoteFeedGuid: block.feedGuid,
@@ -16,14 +18,21 @@ function getBaseRecord(block, satAmount, boostagram, senderName) {
 	};
 }
 
-function buildPaymentPayload(block, dest, satAmount, boostagram, senderName, amount) {
+function buildPaymentPayload(
+	block: Block,
+	dest: Destination,
+	satAmount: number,
+	boostagram: string,
+	senderName: string,
+	amount: number
+): BoostPayment {
 	const record = getBaseRecord(block, satAmount, boostagram, senderName);
 	record.name = dest.name;
 	record.value_msat = amount * 1000;
 
-	const customRecords = { 7629169: JSON.stringify(record) };
-	if (dest.customKey != null) {
-		customRecords[String(dest.customKey)] = dest.customValue;
+	const customRecords: Record<string, string> = { '7629169': JSON.stringify(record) };
+	if (dest.customKey != null && dest.customValue != null) {
+		customRecords[String(dest.customKey)] = String(dest.customValue);
 	}
 
 	let type = dest.type;
@@ -42,7 +51,13 @@ function buildPaymentPayload(block, dest, satAmount, boostagram, senderName, amo
 }
 
 /** Build per-destination split payments from a value block. */
-export default function buildBoostPayments({ block, satAmount, boostagram, senderName, isDefault }) {
+export default function buildBoostPayments({
+	block,
+	satAmount,
+	boostagram,
+	senderName,
+	isDefault
+}: BuildBoostPaymentsArgs): BoostPayment[] {
 	const destinations = (block?.value?.destinations || []).map((dest, destIndex) => ({
 		...dest,
 		destIndex
@@ -61,8 +76,8 @@ export default function buildBoostPayments({ block, satAmount, boostagram, sende
 	if (
 		!feesDestinations.some(
 			(item) =>
-				item.customKey === splitKitObject.customKey &&
-				item.customValue === splitKitObject.customValue &&
+				item.customKey === (splitKitObject as { customKey?: string }).customKey &&
+				item.customValue === (splitKitObject as { customValue?: string }).customValue &&
 				item.address === splitKitObject.address
 		) &&
 		!isDefault
@@ -70,7 +85,7 @@ export default function buildBoostPayments({ block, satAmount, boostagram, sende
 		// Split Kit fee destination is optional and currently disabled.
 	}
 
-	const payments = [];
+	const payments: BoostPayment[] = [];
 	let runningTotal = satAmount;
 
 	for (const dest of feesDestinations) {

@@ -1,6 +1,7 @@
-import processPayments from './processPayments.js';
+import processPayments from './processPayments';
+import type { BoostPayment } from '$lib/types';
 
-async function resolveLnaddressSplits(splits) {
+async function resolveLnaddressSplits(splits: BoostPayment[]): Promise<BoostPayment[]> {
 	return Promise.all(
 		splits.map(async (split) => {
 			const [name, server] = split.destination.split('@');
@@ -8,11 +9,16 @@ async function resolveLnaddressSplits(splits) {
 
 			try {
 				const res = await fetch(paymentUrl);
-				const data = await res.json();
+				const data = (await res.json()) as {
+					pubkey?: string;
+					customData?: { customKey?: string | number; customValue?: string };
+				};
 				if (data.pubkey) {
 					Object.assign(split, { type: 'node', destination: data.pubkey });
-					if (data?.customData?.customKey) {
-						split.customRecords[data.customData.customKey] = data.customData.customValue;
+					if (data?.customData?.customKey != null && data.customData.customValue != null) {
+						split.customRecords[String(data.customData.customKey)] = String(
+							data.customData.customValue
+						);
 					}
 				}
 			} catch {
@@ -24,8 +30,8 @@ async function resolveLnaddressSplits(splits) {
 	);
 }
 
-export default async function handlePayments(accessToken, body) {
-	const payments = [].concat(body);
+export default async function handlePayments(accessToken: string, body: BoostPayment | BoostPayment[]) {
+	const payments = ([] as BoostPayment[]).concat(body);
 	const keysends = payments.filter((v) => v.type === 'node');
 	const lnurlp = await resolveLnaddressSplits(payments.filter((v) => v.type === 'lnaddress'));
 
