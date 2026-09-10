@@ -1,5 +1,6 @@
 import sendKeysend from './sendKeysend';
 import sendLnurl from './sendLnurl';
+import sendBolt11 from './sendBolt11';
 import type { BoostPayment, PaymentAttemptResult } from '$lib/types';
 
 export default async function processPayments(
@@ -12,6 +13,9 @@ export default async function processPayments(
 		}
 		if (recipient?.type === 'lnaddress') {
 			return sendLnurl({ accessToken, recipient });
+		}
+		if (recipient?.type === 'bolt11') {
+			return sendBolt11({ accessToken, recipient });
 		}
 		return Promise.resolve({ status: 'skipped', recipient });
 	});

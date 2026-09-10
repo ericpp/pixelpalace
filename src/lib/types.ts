@@ -1,5 +1,7 @@
 export type PaymentType = 'alby' | 'wallet' | 'qr' | 'venmo' | '';
 
+export type PaymentIntent = 'boost' | 'zap';
+
 export type SplitStatus = 'success' | 'failed' | 'pending';
 
 export interface Destination {
@@ -111,4 +113,17 @@ export interface AlbyUser {
 export interface LnurlInvoiceResponse {
 	pr?: string;
 	[key: string]: unknown;
+}
+
+export interface ResolvedNostrEvent {
+	pointer: string;
+	bech32: string;
+	eventId: string;
+	pubkey: string;
+	kind: number;
+	address?: string;
+	relays: string[];
+	title: string;
+	tags: string[][];
+	loaded: boolean;
 }

@@ -1,6 +1,13 @@
 import { writable } from 'svelte/store';
 import { env } from '$env/dynamic/public';
-import type { Block, LnurlInvoiceResponse, MainSettings, UserState, WalletState } from '$lib/types';
+import type {
+	Block,
+	LnurlInvoiceResponse,
+	MainSettings,
+	ResolvedNostrEvent,
+	UserState,
+	WalletState
+} from '$lib/types';
 
 type PublicEnvName = `PUBLIC_${string}`;
 
@@ -167,6 +174,31 @@ export function getVenmoUrl(): string {
 	return requireEnv('PUBLIC_VENMO_URL');
 }
 
+const DEFAULT_NOSTR_RELAYS = [
+	'wss://relay.damus.io',
+	'wss://nos.lol',
+	'wss://relay.nostr.band'
+];
+
+export function getNostrEventPointer(): string | undefined {
+	return optionalEnv('PUBLIC_NOSTR_EVENT');
+}
+
+export function isNostrEventConfigured(): boolean {
+	return Boolean(getNostrEventPointer());
+}
+
+export function getNostrRelays(): string[] {
+	const configured = optionalEnv('PUBLIC_NOSTR_RELAYS');
+	if (!configured) {
+		return DEFAULT_NOSTR_RELAYS;
+	}
+	return configured
+		.split(',')
+		.map((url) => url.trim())
+		.filter(Boolean);
+}
+
 export function getDefaultBackgroundUrl(): string {
 	return 'https://images.pexels.com/photos/10819642/pexels-photo-10819642.jpeg';
 }
@@ -189,3 +221,5 @@ export const mainSettings = writable<MainSettings>({
 export const liveMode = writable<string | undefined>(undefined);
 export const liveEnclosure = writable<string | undefined>(undefined);
 export const loaded = writable(false);
+
+export const nostrEvent = writable<ResolvedNostrEvent | null>(null);

@@ -28,6 +28,7 @@
 	"dependencies": {
 		"@getalby/bitcoin-connect": "^3.12.3",
 		"hls.js": "^1.5.11",
+		"nostr-tools": "^2.23.12",
 		"jsonwebtoken": "^9.0.3",
 		"qrcode": "^1.5.3",
 		"socket.io-client": "^4.7.0",

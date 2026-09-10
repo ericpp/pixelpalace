@@ -1,7 +1,17 @@
 <script lang="ts">
 	import { onMount, type Component } from 'svelte';
-	import { getRemoteServer, getEventGuid, getEventSocketUrl, liveBlocks, mainSettings } from '$/stores';
+	import {
+		getRemoteServer,
+		getEventGuid,
+		getEventSocketUrl,
+		getNostrEventPointer,
+		getNostrRelays,
+		liveBlocks,
+		mainSettings,
+		nostrEvent
+	} from '$/stores';
 	import { connectEventSocket } from '$lib/socket';
+	import { hydrateNostrEvent, parseNostrPointer } from '$lib/nostr/resolveEvent';
 	import type { Block, MainSettings } from '$lib/types';
 
 	const guid = getEventGuid();
@@ -40,6 +50,7 @@
 		window.addEventListener('resize', checkScreenWidth);
 
 		loadBlocks();
+		loadNostrEvent();
 		const url = getEventSocketUrl(controlGuid);
 		const socketPromise = connectEventSocket(url);
 
@@ -64,6 +75,22 @@
 			socketPromise.then((socket) => socket.disconnect());
 		};
 	});
+
+	async function loadNostrEvent() {
+		const pointer = getNostrEventPointer();
+		if (!pointer) {
+			$nostrEvent = null;
+			return;
+		}
+
+		try {
+			const parsed = parseNostrPointer(pointer, getNostrRelays());
+			$nostrEvent = parsed;
+			$nostrEvent = await hydrateNostrEvent(parsed);
+		} catch (err) {
+			console.error('Failed to resolve PUBLIC_NOSTR_EVENT', err);
+		}
+	}
 
 	async function loadBlocks() {
 		if (!$liveBlocks?.length) {

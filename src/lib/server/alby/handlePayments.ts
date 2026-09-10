@@ -37,7 +37,8 @@ export default async function handlePayments(accessToken: string, body: BoostPay
 
 	keysends.push(...lnurlp.filter((v) => v.type === 'node'));
 	const remainingLnurl = lnurlp.filter((v) => v.type === 'lnaddress');
-	const splits = [...keysends, ...remainingLnurl];
+	const bolt11s = payments.filter((v) => v.type === 'bolt11');
+	const splits = [...keysends, ...remainingLnurl, ...bolt11s];
 	const completedPayments = await processPayments(accessToken, splits);
 
 	return { splits, completedPayments };

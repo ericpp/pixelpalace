@@ -1,9 +1,10 @@
 <script lang="ts">
 	import Modal from './Modal.svelte';
-	import type { PaymentType } from '$lib/types';
+	import type { PaymentIntent, PaymentType } from '$lib/types';
 
 	export let showModal: boolean;
 	export let paymentType: PaymentType | undefined;
+	export let paymentIntent: PaymentIntent = 'boost';
 
 	import { page } from '$app/stores';
 
@@ -45,7 +46,14 @@
 
 <Modal bind:showModal>
 	<boost-container>
-		<h1>How would you like to boost?</h1>
+		<h1>How would you like to {paymentIntent === 'zap' ? 'zap' : 'boost'}?</h1>
+		<p class="intent-note">
+			{#if paymentIntent === 'zap'}
+				Zaps go to the linked Nostr event
+			{:else}
+				Boosts go to the current Split Kit block
+			{/if}
+		</p>
 
 		<div class="buttons">
 			{#if albyEnabled}
@@ -71,13 +79,15 @@
 			<button disabled={connectingWallet} on:click={handleWalletClick}>
 				{connectingWallet ? 'Connecting…' : 'Wallet'}
 			</button>
-			<button
-				on:click={() => {
-					paymentType = 'venmo';
-				}}
-			>
-				Venmo
-			</button>
+			{#if paymentIntent !== 'zap'}
+				<button
+					on:click={() => {
+						paymentType = 'venmo';
+					}}
+				>
+					Venmo
+				</button>
+			{/if}
 		</div>
 	</boost-container>
 </Modal>
@@ -95,6 +105,13 @@
 	h1 {
 		text-align: center;
 		color: white;
+	}
+
+	.intent-note {
+		margin: 0 24px 16px;
+		text-align: center;
+		color: rgba(255, 255, 255, 0.8);
+		font-weight: 600;
 	}
 
 	button {

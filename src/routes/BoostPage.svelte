@@ -4,19 +4,23 @@
 	import QR from './QR.svelte';
 	import { connectEventSocket } from '$lib/socket';
 
-	import { user, wallet, getEventGuid, getEventSocketUrl, fetchLnurlInvoice, getBtcPriceUrl } from '$/stores';
-	import type { Block, PaymentType, SplitStatus } from '$lib/types';
+	import { user, wallet, getEventGuid, getEventSocketUrl, fetchLnurlInvoice, getBtcPriceUrl, nostrEvent } from '$/stores';
+	import type { Block, PaymentIntent, PaymentType, SplitStatus } from '$lib/types';
 
 	export let showModal: boolean;
 	export let broadcastingBlock: Block;
 	export let paymentType: PaymentType;
 	export let isMobile = false;
 	export let throwConfetti: (amount: number) => void;
+	export let paymentIntent: PaymentIntent = 'boost';
 
 	import sendBoost from '$lib/functions/sendBoost';
 	import sendBoostWallet from '$lib/functions/sendBoostWallet';
+	import { sendZapAlby, sendZapWallet } from '$lib/functions/sendZap';
 	import refreshAlbyToken from '$lib/functions/refreshAlbyToken';
 	import { getConnectedProvider, refreshConnectedWalletBalance } from '$lib/bitcoinConnect';
+	import { canZapEvent } from '$lib/nostr/resolveEvent';
+	import { createZapInvoices, getZapSplitRecipients, type ZapInvoice } from '$lib/nostr/zap';
 
 	let senderName = 'anonymous';
 	let boostagram = '';
@@ -27,8 +31,15 @@
 	let invoice: string | undefined;
 	let activeScreen: 'boost' | 'splits' = 'boost';
 	let paying = false;
+	let payError = '';
 	let splitStatuses: Record<number, SplitStatus> = {};
+	let zapInvoices: ZapInvoice[] = [];
+	let qrInvoiceIndex = 0;
 	$: console.log(broadcastingBlock);
+	$: isZap = paymentIntent === 'zap';
+	$: zapSplits = isZap && $nostrEvent ? getZapSplitRecipients($nostrEvent, amount) : [];
+	$: splitRows = isZap ? zapSplits : broadcastingBlock.value?.destinations || [];
+	$: canPayZap = canZapEvent($nostrEvent);
 
 	onMount(() => {
 		fetchConversionRate();
@@ -83,8 +94,96 @@
 		return 5000000;
 	}
 
+	function markZapStatuses(invoices: ZapInvoice[], status: SplitStatus) {
+		splitStatuses = Object.fromEntries(invoices.map((inv) => [inv.destIndex, status]));
+	}
+
+	async function handleZap() {
+		if (paying) return;
+		if (!$nostrEvent || !canPayZap) {
+			payError = 'Could not load the Nostr event yet';
+			return;
+		}
+
+		payError = '';
+		localStorage.setItem('senderName', senderName);
+		paying = true;
+		splitStatuses = {};
+		if (isMobile) activeScreen = 'splits';
+
+		try {
+			const invoices = await createZapInvoices({
+				target: $nostrEvent,
+				satAmount: amount,
+				comment: boostagram
+			});
+			zapInvoices = invoices;
+
+			if (paymentType === 'qr') {
+				qrInvoiceIndex = 0;
+				invoice = invoices[0]?.invoice;
+				showQR = true;
+				return;
+			}
+
+			if (paymentType === 'wallet') {
+				const provider = getConnectedProvider() || $wallet.provider;
+				if (!provider) {
+					payError = 'Wallet is not connected';
+					return;
+				}
+
+				const result = await sendZapWallet({
+					provider,
+					invoices,
+					onPaymentResult: ({ destIndex, status }) => {
+						if (destIndex == null) return;
+						splitStatuses = { ...splitStatuses, [destIndex]: status };
+					}
+				});
+				await refreshConnectedWalletBalance();
+				if (result.failureCount === 0 && result.successCount > 0) {
+					throwConfetti(amount);
+					boostagram = '';
+					await new Promise((resolve) => setTimeout(resolve, 800));
+					showModal = false;
+					splitStatuses = {};
+					if ($wallet.balance != null) {
+						$wallet.balance -= amount;
+					}
+				} else {
+					payError = 'One or more zaps failed';
+				}
+				return;
+			}
+
+			if (paymentType === 'alby' && $user.loggedIn) {
+				await refreshAlbyToken();
+				await sendZapAlby(invoices);
+				markZapStatuses(invoices, 'success');
+				throwConfetti(amount);
+				boostagram = '';
+				await new Promise((resolve) => setTimeout(resolve, 800));
+				showModal = false;
+				splitStatuses = {};
+				if ($user.balance != null) {
+					$user.balance -= amount;
+				}
+			}
+		} catch (err) {
+			console.log(err);
+			payError = err instanceof Error ? err.message : 'Zap failed';
+			if (zapSplits.length) {
+				splitStatuses = Object.fromEntries(zapSplits.map((row) => [row.destIndex, 'failed']));
+			}
+		} finally {
+			paying = false;
+		}
+	}
+
 	async function handleBoost() {
 		if (paying) return;
+		payError = '';
 
 		// throwConfetti(amount);
 		// showModal = false;
@@ -185,6 +284,20 @@
 		}
 	}
 
+	async function handlePay() {
+		if (isZap) {
+			await handleZap();
+			return;
+		}
+		await handleBoost();
+	}
+
+	function showNextZapInvoice() {
+		if (qrInvoiceIndex + 1 >= zapInvoices.length) return;
+		qrInvoiceIndex += 1;
+		invoice = zapInvoices[qrInvoiceIndex]?.invoice;
+	}
+
 	$: console.log(broadcastingBlock);
 
 	function handleKeyDown(event: KeyboardEvent) {
@@ -210,12 +323,24 @@
 		amount = value;
 	}
 
+	function splitRowIndex(person: { destIndex?: number }, fallback: number): number {
+		return person.destIndex ?? fallback;
+	}
+
+	function splitRowValue(person: { amount?: number; split?: string | number }): string | number {
+		if (isZap && person.amount != null) return person.amount;
+		return person.split ?? '';
+	}
+
 	$: console.log(activeScreen);
 </script>
 
 <Modal bind:showModal bind:paymentType showNewPaymentType={true}>
 	<boost-container>
-		<h2>{broadcastingBlock.title}</h2>
+		<h2>{isZap ? $nostrEvent?.title || 'Zap' : broadcastingBlock.title}</h2>
+		{#if isZap}
+			<p class="intent-note">Zaps go to the linked Nostr event</p>
+		{/if}
 
 		{#if isMobile}
 			<div class="screen-select">
@@ -225,7 +350,7 @@
 					}}
 					class:active={activeScreen === 'boost'}
 				>
-					Boostagram
+					{isZap ? 'Message' : 'Boostagram'}
 				</button>
 				<button
 					on:click={() => {
@@ -233,7 +358,7 @@
 					}}
 					class:active={activeScreen === 'splits'}
 				>
-					Splits
+					{isZap ? 'Recipients' : 'Splits'}
 				</button>
 			</div>
 		{/if}
@@ -250,9 +375,11 @@
 						<p>{$wallet.balance} sats</p>
 					</balance-text>
 				{/if}
-				<label>
-					<input type="text" bind:value={senderName} placeholder="Enter your name here..." />
-				</label>
+				{#if !isZap}
+					<label>
+						<input type="text" bind:value={senderName} placeholder="Enter your name here..." />
+					</label>
+				{/if}
 				<textarea bind:value={boostagram} rows="4" placeholder="Enter your message here..."></textarea>
 				<amount-text>
 					<h3>Amount</h3>
@@ -280,27 +407,30 @@
 			<right class:hide={isMobile && activeScreen === 'boost'} class:fullwidth={isMobile}>
 				<header>
 					<p>Name</p>
-					<p>Split</p>
+					<p>{isZap ? 'Sats' : 'Split'}</p>
 				</header>
 				<ul>
-					{#each broadcastingBlock.value?.destinations || [] as person, i}
+					{#each splitRows as person, i}
+						{@const destIndex = splitRowIndex(person, i)}
 						<li>
 							<p class="split-name">
 								<span
 									class="split-status"
-									class:success={splitStatuses[i] === 'success'}
-									class:failed={splitStatuses[i] === 'failed'}
-									aria-hidden={!(splitStatuses[i] === 'success' || splitStatuses[i] === 'failed')}
+									class:success={splitStatuses[destIndex] === 'success'}
+									class:failed={splitStatuses[destIndex] === 'failed'}
+									aria-hidden={!(
+										splitStatuses[destIndex] === 'success' || splitStatuses[destIndex] === 'failed'
+									)}
 								>
-									{#if splitStatuses[i] === 'success'}
+									{#if splitStatuses[destIndex] === 'success'}
 										✓
-									{:else if splitStatuses[i] === 'failed'}
+									{:else if splitStatuses[destIndex] === 'failed'}
 										✗
 									{/if}
 								</span>
 								{person.name}
 							</p>
-							<p>{person.split}</p>
+							<p>{splitRowValue(person)}</p>
 						</li>
 					{/each}
 				</ul>
@@ -312,8 +442,17 @@
 			<button on:click={() => setAmount(10000)}>10,000</button>
 			<button on:click={() => setAmount(25000)}>25,000</button>
 		</btn-container>
-		<button class:hide={isMobile && activeScreen === 'splits'} class="boost" disabled={paying} on:click={handleBoost}>
-			{paying ? 'Paying…' : 'Boost'}
+		{#if payError}
+			<p class="pay-error">{payError}</p>
+		{/if}
+		<button
+			class:hide={isMobile && activeScreen === 'splits'}
+			class="boost"
+			class:zap={isZap}
+			disabled={paying || (isZap && !canPayZap)}
+			on:click={handlePay}
+		>
+			{paying ? 'Paying…' : isZap ? 'Zap' : 'Boost'}
 		</button>
 	</boost-container>
 </Modal>
@@ -324,6 +463,12 @@
 			<div class="qr">
 				<QR code={invoice} />
 			</div>
+			{#if isZap && zapInvoices.length > 1}
+				<p class="qr-progress">Invoice {qrInvoiceIndex + 1} of {zapInvoices.length}</p>
+				{#if qrInvoiceIndex + 1 < zapInvoices.length}
+					<button class="next-invoice" on:click={showNextZapInvoice}>Next invoice</button>
+				{/if}
+			{/if}
 		</div>
 	</Modal>
 {/if}
@@ -344,6 +489,16 @@
 		min-height: 1.5em;
 		width: 100%;
 		font-size: 3em;
+	}
+	.intent-note,
+	.pay-error,
+	.qr-progress {
+		margin: 0 0 8px;
+		text-align: center;
+		font-weight: 600;
+	}
+	.pay-error {
+		color: #ff5c5c;
 	}
 	h3 {
 		text-align: center;
@@ -522,11 +677,25 @@
 		font-size: 1.6em;
 	}
 
+	.boost.zap {
+		background-color: #8b5cf6;
+		color: white;
+	}
+
 	.boost:disabled {
 		width: calc(100% - 16px);
 
 		background-color: hsl(195, 94%, 95%);
 		color: hsl(195, 100%, 15%);
+	}
+
+	.boost.zap:disabled {
+		background-color: #ddd6fe;
+		color: #4c1d95;
+	}
+
+	.next-invoice {
+		margin-top: 36px;
 	}
 	input,
 	textarea {
