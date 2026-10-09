@@ -47,6 +47,19 @@ export interface UserState {
 	balance?: number;
 }
 
+export interface EffectSlotState {
+	id: string;
+	unlocked: boolean;
+	remainingMs: number;
+}
+
+export interface FiredEffect {
+	id: string;
+	label: string;
+	senderName: string;
+	message: string;
+}
+
 export interface WalletProvider {
 	getBalance?: () => Promise<{ balance: number }>;
 	keysend?: (params: {

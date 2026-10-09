@@ -36,30 +36,32 @@
 			<Close size="24" />
 		</button>
 		<div>
-			<h1>How can you support the Showcase?</h1>
+			<h1>How can you support the festival?</h1>
 
 			<ol>
 				<li class="item">
-					<p>
-						Click the Showcase button. The event MCs are always updating who the support goes to
-						based on what's going on with the show. This is the recommended way.
-					</p>
+					Click on the Boost button to send direct support to the artist and crew.
+					The event MCs are always updating who the support goes to
+					based on what's going on with the show.
 				</li>
 				<li class="item">
-					<p>Click a band. All your support will go to that particular band.</p>
+					Select the method you want to use to send your support.
+					You can use your Lightning wallet, Alby wallet, QR code, or Venmo?
+				</li>
+				<li class="item">
+					Enter a name, amount, and a message you want to send to the artist and crew.
+				</li>
+				<li class="item">
+					Click "Boost" to Boost!
 				</li>
 
-				<li class="item">
-					<p>
-						Click Support the Crew and you donation goes to all the people that made this possible.
-					</p>
-				</li>
+				<!-- 
 				<li class="item">
 					<p>
 						You can also scan the QR code (or click it to copy the address to your clipboard), and
 						support from the wallet of your choice.
 					</p>
-				</li>
+				</li> -->
 			</ol>
 		</div>
 	</modal>
@@ -102,6 +104,7 @@
 		display: flex;
 		flex-direction: column;
 		justify-content: center;
+		background-color: #f6ecd4;
 		background-image: url('/list-bg.webp');
 		height: 100vh;
 		width: calc(100vh * var(--aspect-ratio));
@@ -116,7 +119,7 @@
 
 	h1 {
 		color: rgb(86, 35, 18);
-		margin: 100px 32px 8px 32px;
+		margin: 100px 32px 32px 32px;
 		font-size: 1.7em;
 		font-family: 'HomemadeApple';
 		text-align: center;
@@ -156,6 +159,7 @@
 		}
 
 		div {
+			background-color: #f6ecd4;
 			background-image: url('/list-bg-mobile.webp');
 			height: 100vh;
 			width: 100vw;

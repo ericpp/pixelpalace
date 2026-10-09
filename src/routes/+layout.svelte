@@ -2,9 +2,20 @@
 	import './styles.css';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
-	import { getAlbyServer, getAlbyRedirectUri, isAlbyEnabled, albyReady, userReady, loaded } from '$/stores';
+	import {
+		getAlbyServer,
+		getAlbyRedirectUri,
+		isAlbyEnabled,
+		isEffectToastEnabled,
+		albyReady,
+		userReady,
+		loaded
+	} from '$/stores';
 	import { setupBitcoinConnect } from '$lib/bitcoinConnect';
 	import { applyAlbyUser } from '$lib/functions/refreshAlbyToken';
+	import { connectLiveSocket } from '$lib/liveSocket';
+	import { loadLiveSession } from '$lib/live';
+	import EffectCallout from './EffectCallout.svelte';
 	import {
 		claimAlbyCode,
 		consumeAlbyRedirectUri,
@@ -14,6 +25,8 @@
 	onMount(async () => {
 		await setupBitcoinConnect();
 		await loadAlby();
+		await loadLiveSession();
+		connectLiveSocket();
 	});
 
 	async function loadAlby() {
@@ -63,6 +76,9 @@
 	<main>
 		<slot />
 	</main>
+	{#if isEffectToastEnabled()}
+		<EffectCallout />
+	{/if}
 </div>
 
 <style>

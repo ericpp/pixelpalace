@@ -3,15 +3,56 @@
 	import Venmo from './Venmo.svelte';
 	import PaymentSelector from './PaymentSelector.svelte';
 	import type { Block, PaymentIntent, PaymentType } from '$lib/types';
-	import { isNostrEventConfigured, nostrEvent } from '$/stores';
+	import { isNostrEventConfigured, nostrEvent, wallet } from '$/stores';
+	import { lockEffectSlot } from '$lib/functions/sendEffectBoost';
 	import { nostrEventHref } from '$lib/nostr/resolveEvent';
 
 	export let broadcastingBlock: Block;
 	export let throwConfetti: (amount: number) => void;
 	export let isMobile = false;
-	let showModal = false;
+	export let appearance: 'default' | 'headless' = 'default';
+	export let showModal = false;
+	export let paymentIntent: PaymentIntent = 'boost';
+	export let presetAmount: number | undefined = undefined;
+	export let presetMessage = '';
+	export let effectId: string | undefined = undefined;
+	export let onEffectSent: () => void = () => {};
 	let paymentType: PaymentType | undefined;
-	let paymentIntent: PaymentIntent = 'boost';
+	let modalWasOpen = false;
+	let satAmount: number | undefined = undefined;
+	let armedEffectId = '';
+
+	$: if (showModal && !modalWasOpen) {
+		paymentType = $wallet.connected ? 'wallet' : undefined;
+		satAmount = undefined;
+		armedEffectId = '';
+		modalWasOpen = true;
+	} else if (!showModal) {
+		modalWasOpen = false;
+		satAmount = undefined;
+		armedEffectId = '';
+	}
+
+	// A persisted wallet can finish connecting after the modal opens. Only fill
+	// the initial unset state so Change Payment Type (empty string) stays put.
+	$: if (showModal && paymentType === undefined && $wallet.connected) {
+		paymentType = 'wallet';
+	}
+
+	function attachSats(amount: number) {
+		satAmount = amount;
+		armedEffectId = effectId || '';
+	}
+
+	function onPaid(amount: number) {
+		const id = armedEffectId;
+		armedEffectId = '';
+		throwConfetti(amount);
+		if (!id) return;
+		void lockEffectSlot(id).catch((err) => {
+			console.error(err);
+		});
+	}
 
 	const zapEnabled = isNostrEventConfigured();
 
@@ -25,6 +66,7 @@
 	$: console.log(showModal);
 </script>
 
+{#if appearance !== 'headless'}
 <div class="container" class:has-zap={zapEnabled}>
 	<button class="boost-btn boost" class:mobile={isMobile} on:click={() => openWithIntent('boost')}>
 		Boost
@@ -43,9 +85,24 @@
 		</a>
 	</p>
 {/if}
+{/if}
 
 {#if showModal}
-	{#if !paymentType}
+	{#if effectId && satAmount == null}
+		<BoostPage
+			effectMode
+			{effectId}
+			bind:showModal
+			{broadcastingBlock}
+			paymentType=""
+			throwConfetti={onPaid}
+			{isMobile}
+			{paymentIntent}
+			{presetMessage}
+			onAttachSats={attachSats}
+			{onEffectSent}
+		/>
+	{:else if !paymentType}
 		<PaymentSelector bind:paymentType bind:showModal {paymentIntent} />
 	{:else if paymentType === 'venmo'}
 		<Venmo bind:showModal bind:paymentType />
@@ -54,9 +111,11 @@
 			bind:showModal
 			{broadcastingBlock}
 			bind:paymentType
-			{throwConfetti}
+			throwConfetti={onPaid}
 			{isMobile}
 			{paymentIntent}
+			presetAmount={satAmount ?? presetAmount}
+			{presetMessage}
 		/>
 	{/if}
 {/if}

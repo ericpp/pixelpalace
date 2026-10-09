@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import Modal from './Modal.svelte';
 	import QR from './QR.svelte';
+	import SplitList from './SplitList.svelte';
 	import { connectEventSocket } from '$lib/socket';
 
 	import { user, wallet, getEventGuid, getEventSocketUrl, fetchLnurlInvoice, getBtcPriceUrl, nostrEvent } from '$/stores';
@@ -13,37 +14,54 @@
 	export let isMobile = false;
 	export let throwConfetti: (amount: number) => void;
 	export let paymentIntent: PaymentIntent = 'boost';
+	export let presetAmount: number | undefined = undefined;
+	export let presetMessage = '';
+	export let effectMode = false;
+	export let effectId = '';
+	export let onAttachSats: (amount: number) => void = () => {};
+	export let onEffectSent: () => void = () => {};
 
 	import sendBoost from '$lib/functions/sendBoost';
 	import sendBoostWallet from '$lib/functions/sendBoostWallet';
+	import sendEffectBoost from '$lib/functions/sendEffectBoost';
 	import { sendZapAlby, sendZapWallet } from '$lib/functions/sendZap';
 	import refreshAlbyToken from '$lib/functions/refreshAlbyToken';
 	import { getConnectedProvider, refreshConnectedWalletBalance } from '$lib/bitcoinConnect';
 	import { canZapEvent } from '$lib/nostr/resolveEvent';
 	import { createZapInvoices, getZapSplitRecipients, type ZapInvoice } from '$lib/nostr/zap';
+	import { EFFECT_ICONS, EFFECT_LABELS, isEffectId } from '$lib/effects';
 
-	let senderName = 'anonymous';
-	let boostagram = '';
+	let senderName = effectMode ? '' : 'anonymous';
+	let boostagram = presetMessage;
 	let fromIndex = true;
-	let amount = 1;
+	let amount = effectMode ? 0 : presetAmount && presetAmount >= 1 ? Math.floor(presetAmount) : 1;
+	$: amountLocked = !effectMode && presetAmount != null && presetAmount >= 1;
 	let btcPrice = 250000;
 	let showQR = false;
 	let invoice: string | undefined;
 	let activeScreen: 'boost' | 'splits' = 'boost';
 	let paying = false;
 	let payError = '';
+	let showExtras = false;
 	let splitStatuses: Record<number, SplitStatus> = {};
 	let zapInvoices: ZapInvoice[] = [];
 	let qrInvoiceIndex = 0;
 	$: console.log(broadcastingBlock);
 	$: isZap = paymentIntent === 'zap';
+	$: effectIcon = isEffectId(effectId) ? EFFECT_ICONS[effectId] : '';
+	$: effectLabel = isEffectId(effectId) ? EFFECT_LABELS[effectId] : 'Item';
 	$: zapSplits = isZap && $nostrEvent ? getZapSplitRecipients($nostrEvent, amount) : [];
 	$: splitRows = isZap ? zapSplits : broadcastingBlock.value?.destinations || [];
 	$: canPayZap = canZapEvent($nostrEvent);
 
 	onMount(() => {
 		fetchConversionRate();
-		senderName = localStorage.getItem('senderName') || 'anonymous';
+		const storedName = localStorage.getItem('senderName') || '';
+		senderName = effectMode
+			? storedName === 'anonymous'
+				? ''
+				: storedName
+			: storedName || 'anonymous';
 
 		const url = getEventSocketUrl(broadcastingBlock.eventGuid || getEventGuid());
 		const socketPromise = connectEventSocket(url);
@@ -181,13 +199,43 @@
 		}
 	}
 
+	async function handleEffectBoost() {
+		if (paying || !effectId) return;
+		payError = '';
+		const sats = Math.floor(Number(amount) || 0);
+		localStorage.setItem('senderName', senderName);
+		if (showExtras && sats >= 1) {
+			onAttachSats(sats);
+			return;
+		}
+		paying = true;
+		try {
+			await sendEffectBoost({
+				effectId,
+				boostagram,
+				senderName,
+				eventGuid: broadcastingBlock.eventGuid || getEventGuid(),
+				blockGuid: broadcastingBlock.blockGuid
+			});
+			onEffectSent();
+			boostagram = '';
+			showModal = false;
+		} catch (err) {
+			console.log(err);
+			payError = err instanceof Error ? err.message : 'Effect failed';
+		} finally {
+			paying = false;
+		}
+	}
+
 	async function handleBoost() {
 		if (paying) return;
+		if (effectMode) {
+			await handleEffectBoost();
+			return;
+		}
 		payError = '';
 
-		// throwConfetti(amount);
-		// showModal = false;
-		// return;
 		if (paymentType === 'qr') {
 			localStorage.setItem('senderName', senderName);
 			console.log(broadcastingBlock);
@@ -308,152 +356,227 @@
 	}
 
 	function enforceMinMax(event: FocusEvent) {
+		if (amountLocked) return;
 		const target = event.target as HTMLInputElement;
+		if (effectMode && !showExtras) {
+			const value = parseInt(target.value, 10);
+			amount = Number.isFinite(value) && value > 0 ? Math.min(value, 5000000) : 0;
+			return;
+		}
 		let value = parseInt(target.value, 10) || 1;
-		if (value <= 1) {
+		const max = maxBoostAmount();
+		if (max < 1) {
 			amount = 1;
-		} else if (value > maxBoostAmount()) {
-			amount = maxBoostAmount();
+		} else if (value <= 1) {
+			amount = 1;
+		} else if (value > max) {
+			amount = max;
 		} else {
 			amount = value;
 		}
 	}
 
 	function setAmount(value: number) {
-		amount = value;
+		if (amountLocked) return;
+		if (effectMode && !showExtras) {
+			amount = Math.max(0, Math.min(Math.floor(value), 5000000));
+			return;
+		}
+		const max = maxBoostAmount();
+		amount = max < 1 ? 1 : Math.min(value, max);
 	}
 
-	function splitRowIndex(person: { destIndex?: number }, fallback: number): number {
-		return person.destIndex ?? fallback;
-	}
-
-	function splitRowValue(person: { amount?: number; split?: string | number }): string | number {
-		if (isZap && person.amount != null) return person.amount;
-		return person.split ?? '';
+	function toggleExtras() {
+		showExtras = !showExtras;
+		if (showExtras) {
+			if (amount < 1) amount = 1;
+		} else {
+			activeScreen = 'boost';
+		}
 	}
 
 	$: console.log(activeScreen);
 </script>
 
-<Modal bind:showModal bind:paymentType showNewPaymentType={true}>
+<Modal bind:showModal bind:paymentType showNewPaymentType={!effectMode}>
 	<boost-container>
-		<h2>{isZap ? $nostrEvent?.title || 'Zap' : broadcastingBlock.title}</h2>
-		{#if isZap}
-			<p class="intent-note">Zaps go to the linked Nostr event</p>
-		{/if}
-
-		{#if isMobile}
-			<div class="screen-select">
-				<button
-					on:click={() => {
-						activeScreen = 'boost';
-					}}
-					class:active={activeScreen === 'boost'}
-				>
-					{isZap ? 'Message' : 'Boostagram'}
+		{#if effectMode}
+			<div class="effect-use" class:expanded={showExtras}>
+				{#if effectIcon}
+					<img class="effect-icon" src={effectIcon} alt="" />
+				{/if}
+				<h2>{effectLabel}</h2>
+				{#if showExtras && isMobile}
+					<div class="screen-select">
+						<button
+							type="button"
+							on:click={() => {
+								activeScreen = 'boost';
+							}}
+							class:active={activeScreen === 'boost'}
+						>
+							Item
+						</button>
+						<button
+							type="button"
+							on:click={() => {
+								activeScreen = 'splits';
+							}}
+							class:active={activeScreen === 'splits'}
+						>
+							Splits
+						</button>
+					</div>
+				{/if}
+				<panels class:mobile={isMobile}>
+					<left
+						class:hide={isMobile && showExtras && activeScreen === 'splits'}
+						class:fullwidth={!showExtras || isMobile}
+					>
+						<label class="effect-name">
+							<input type="text" bind:value={senderName} placeholder="Enter your name here..." />
+						</label>
+						<textarea bind:value={boostagram} rows="4" placeholder="Enter your message here..."></textarea>
+						{#if showExtras}
+							<amount-text>
+								<h3>Amount</h3>
+							</amount-text>
+							<amount-container>
+								<input
+									class="amount"
+									type="number"
+									bind:value={amount}
+									step="1"
+									min={1}
+									max={5000000}
+									on:keydown={handleKeyDown}
+									on:blur={enforceMinMax}
+								/>
+								<p class="sats">{amount > 1 ? '⚡ sats' : '⚡ sat'}</p>
+								<p class="conversion">~${satsToDollars(amount)}</p>
+							</amount-container>
+						{/if}
+					</left>
+					{#if showExtras}
+						<right class:hide={isMobile && activeScreen === 'boost'} class:fullwidth={isMobile}>
+							<SplitList rows={splitRows} statuses={splitStatuses} {isZap} />
+						</right>
+					{/if}
+				</panels>
+				{#if showExtras}
+					<btn-container class:hide={isMobile && activeScreen === 'splits'}>
+						<button type="button" on:click={() => setAmount(1000)}>⚡ 1,000</button>
+						<button type="button" on:click={() => setAmount(5000)}>⚡ 5,000</button>
+						<button type="button" on:click={() => setAmount(10000)}>⚡ 10,000</button>
+						<button type="button" on:click={() => setAmount(25000)}>⚡ 25,000</button>
+					</btn-container>
+				{/if}
+				{#if payError}
+					<p class="pay-error">{payError}</p>
+				{/if}
+				<button class="extras-toggle" type="button" aria-expanded={showExtras} on:click={toggleExtras}>
+					{showExtras ? 'Hide sats' : 'Add sats'}
 				</button>
-				<button
-					on:click={() => {
-						activeScreen = 'splits';
-					}}
-					class:active={activeScreen === 'splits'}
-				>
-					{isZap ? 'Recipients' : 'Splits'}
+				<button class="boost" disabled={paying} on:click={handleBoost}>
+					{paying ? 'Sending…' : showExtras ? 'Boost' : 'Use item'}
 				</button>
 			</div>
-		{/if}
-		<panels class:mobile={isMobile}>
-			<left class:hide={isMobile && activeScreen === 'splits'} class:fullwidth={isMobile}>
-				{#if $user.loggedIn && paymentType === 'alby'}
-					<balance-text>
-						<h3>Balance:</h3>
-						<p>{$user.balance || 0} sats</p>
-					</balance-text>
-				{:else if paymentType === 'wallet' && $wallet.balance != null}
-					<balance-text>
-						<h3>Balance:</h3>
-						<p>{$wallet.balance} sats</p>
-					</balance-text>
-				{/if}
-				{#if !isZap}
-					<label>
-						<input type="text" bind:value={senderName} placeholder="Enter your name here..." />
-					</label>
-				{/if}
-				<textarea bind:value={boostagram} rows="4" placeholder="Enter your message here..."></textarea>
-				<amount-text>
-					<h3>Amount</h3>
-					{#if paymentType === 'alby' && $user.loggedIn}
-						<p>between 1 and {maxBoostAmount()}</p>
+		{:else}
+			<h2>{isZap ? $nostrEvent?.title || 'Zap' : broadcastingBlock.title}</h2>
+			{#if isZap}
+				<p class="intent-note">Zaps go to the linked Nostr event</p>
+			{/if}
+
+			{#if isMobile}
+				<div class="screen-select">
+					<button
+						on:click={() => {
+							activeScreen = 'boost';
+						}}
+						class:active={activeScreen === 'boost'}
+					>
+						{isZap ? 'Message' : 'Boostagram'}
+					</button>
+					<button
+						on:click={() => {
+							activeScreen = 'splits';
+						}}
+						class:active={activeScreen === 'splits'}
+					>
+						{isZap ? 'Recipients' : 'Splits'}
+					</button>
+				</div>
+			{/if}
+			<panels class:mobile={isMobile}>
+				<left class:hide={isMobile && activeScreen === 'splits'} class:fullwidth={isMobile}>
+					{#if $user.loggedIn && paymentType === 'alby'}
+						<balance-text>
+							<h3>Balance:</h3>
+							<p>{$user.balance || 0} sats</p>
+						</balance-text>
 					{:else if paymentType === 'wallet' && $wallet.balance != null}
-						<p>between 1 and {maxBoostAmount()}</p>
+						<balance-text>
+							<h3>Balance:</h3>
+							<p>{$wallet.balance} sats</p>
+						</balance-text>
 					{/if}
-				</amount-text>
-				<amount-container>
-					<input
-						class="amount"
-						type="number"
-						bind:value={amount}
-						step="1"
-						min="1"
-						max="5000000"
-						on:keydown={handleKeyDown}
-						on:blur={enforceMinMax}
-					/>
-					<p class="sats">{amount > 1 ? 'sats' : 'sat'}</p>
-					<p class="conversion">~${satsToDollars(amount)}</p>
-				</amount-container>
-			</left>
-			<right class:hide={isMobile && activeScreen === 'boost'} class:fullwidth={isMobile}>
-				<header>
-					<p>Name</p>
-					<p>{isZap ? 'Sats' : 'Split'}</p>
-				</header>
-				<ul>
-					{#each splitRows as person, i}
-						{@const destIndex = splitRowIndex(person, i)}
-						<li>
-							<p class="split-name">
-								<span
-									class="split-status"
-									class:success={splitStatuses[destIndex] === 'success'}
-									class:failed={splitStatuses[destIndex] === 'failed'}
-									aria-hidden={!(
-										splitStatuses[destIndex] === 'success' || splitStatuses[destIndex] === 'failed'
-									)}
-								>
-									{#if splitStatuses[destIndex] === 'success'}
-										✓
-									{:else if splitStatuses[destIndex] === 'failed'}
-										✗
-									{/if}
-								</span>
-								{person.name}
-							</p>
-							<p>{splitRowValue(person)}</p>
-						</li>
-					{/each}
-				</ul>
-			</right>
-		</panels>
-		<btn-container class:hide={isMobile && activeScreen === 'splits'}>
-			<button on:click={() => setAmount(1000)}>1,000</button>
-			<button on:click={() => setAmount(5000)}>5,000</button>
-			<button on:click={() => setAmount(10000)}>10,000</button>
-			<button on:click={() => setAmount(25000)}>25,000</button>
-		</btn-container>
-		{#if payError}
-			<p class="pay-error">{payError}</p>
+					{#if !isZap}
+						<label>
+							<input type="text" bind:value={senderName} placeholder="Enter your name here..." />
+						</label>
+					{/if}
+					<textarea bind:value={boostagram} rows="4" placeholder="Enter your message here..."></textarea>
+					<amount-text>
+						<h3>Amount</h3>
+						{#if amountLocked}
+							<p>This amount triggers {presetMessage || 'the effect'} on the stream</p>
+						{:else if paymentType === 'alby' && $user.loggedIn}
+							<p>between 1 and {maxBoostAmount()}</p>
+						{:else if paymentType === 'wallet' && $wallet.balance != null}
+							<p>between 1 and {maxBoostAmount()}</p>
+						{/if}
+					</amount-text>
+					<amount-container>
+						<input
+							class="amount"
+							type="number"
+							bind:value={amount}
+							step="1"
+							min={1}
+							max={5000000}
+							readonly={amountLocked}
+							on:keydown={handleKeyDown}
+							on:blur={enforceMinMax}
+						/>
+						<p class="sats">{amount > 1 ? '⚡ sats' : '⚡ sat'}</p>
+						<p class="conversion">~${satsToDollars(amount)}</p>
+					</amount-container>
+				</left>
+				<right class:hide={isMobile && activeScreen === 'boost'} class:fullwidth={isMobile}>
+					<SplitList rows={splitRows} statuses={splitStatuses} {isZap} />
+				</right>
+			</panels>
+			{#if !amountLocked}
+				<btn-container class:hide={isMobile && activeScreen === 'splits'}>
+					<button on:click={() => setAmount(1000)}>⚡ 1,000</button>
+					<button on:click={() => setAmount(5000)}>⚡ 5,000</button>
+					<button on:click={() => setAmount(10000)}>⚡ 10,000</button>
+					<button on:click={() => setAmount(25000)}>⚡ 25,000</button>
+				</btn-container>
+			{/if}
+			{#if payError}
+				<p class="pay-error">{payError}</p>
+			{/if}
+			<button
+				class:hide={isMobile && activeScreen === 'splits'}
+				class="boost"
+				class:zap={isZap}
+				disabled={paying || (isZap && !canPayZap)}
+				on:click={handlePay}
+			>
+				{paying ? 'Paying…' : isZap ? 'Zap' : 'Boost'}
+			</button>
 		{/if}
-		<button
-			class:hide={isMobile && activeScreen === 'splits'}
-			class="boost"
-			class:zap={isZap}
-			disabled={paying || (isZap && !canPayZap)}
-			on:click={handlePay}
-		>
-			{paying ? 'Paying…' : isZap ? 'Zap' : 'Boost'}
-		</button>
 	</boost-container>
 </Modal>
 
@@ -526,53 +649,6 @@
 		flex-direction: column;
 	}
 
-	header {
-		display: flex;
-		justify-content: space-between;
-		margin: 0 8px;
-	}
-	header > p {
-		margin: 0;
-		padding: 0;
-		text-decoration: underline;
-	}
-	ul {
-		padding: 8px;
-		height: calc(100% - 32px);
-		overflow: auto;
-		margin: 0;
-	}
-	li {
-		list-style: none;
-		padding: 0 8px;
-		display: flex;
-		justify-content: space-between;
-	}
-	li > p {
-		padding: 0;
-		margin: 4px 0;
-	}
-	.split-name {
-		display: flex;
-		align-items: center;
-		gap: 6px;
-		text-align: left;
-	}
-	.split-status {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 1em;
-		min-width: 1em;
-		font-weight: 700;
-		line-height: 1;
-	}
-	.split-status.success {
-		color: #3dd68c;
-	}
-	.split-status.failed {
-		color: #ff5c5c;
-	}
 	boost-container textarea {
 		width: calc(100% - 8px);
 		resize: none;
@@ -763,5 +839,132 @@
 
 	.hide {
 		display: none;
+	}
+
+	.effect-use {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 12px;
+		width: 100%;
+		box-sizing: border-box;
+		padding: 8px 0 16px;
+	}
+
+	.effect-icon {
+		height: 140px;
+		width: auto;
+		max-width: 70%;
+		object-fit: contain;
+		image-rendering: pixelated;
+		filter: drop-shadow(2px 3px 0 rgba(0, 0, 0, 0.45));
+	}
+
+	.effect-use h2 {
+		margin: 0;
+	}
+
+	.effect-name {
+		width: 100%;
+	}
+
+	.effect-use left {
+		gap: 8px;
+	}
+
+	.effect-name input,
+	.effect-use textarea {
+		width: 100%;
+		box-sizing: border-box;
+		margin: 0;
+		padding: 8px;
+		font-family: inherit;
+		font-size: 16px;
+		font-weight: 600;
+		line-height: 1.4;
+	}
+
+	.effect-name input::placeholder,
+	.effect-use textarea::placeholder {
+		font-family: inherit;
+		font-size: 16px;
+		font-weight: 600;
+		line-height: 1.4;
+		color: rgba(255, 255, 255, 0.65);
+		opacity: 1;
+	}
+
+	.effect-use textarea {
+		flex: 0 0 auto;
+	}
+
+	.effect-use panels {
+		height: auto;
+		flex: 0 1 auto;
+	}
+
+	.effect-use.expanded {
+		flex: 1;
+		min-height: 0;
+		width: 100%;
+	}
+
+	.effect-use.expanded .effect-icon,
+	.effect-use.expanded h2,
+	.effect-use.expanded .screen-select,
+	.effect-use.expanded btn-container,
+	.effect-use.expanded .pay-error,
+	.effect-use.expanded .extras-toggle,
+	.effect-use.expanded .boost {
+		flex-shrink: 0;
+	}
+
+	.effect-use.expanded panels {
+		flex: 1;
+		min-height: 0;
+		height: auto;
+	}
+
+	.effect-use.expanded left,
+	.effect-use.expanded right {
+		min-height: 0;
+	}
+
+	.effect-use.expanded .effect-icon {
+		height: 64px;
+	}
+
+	.effect-use.expanded textarea {
+		flex: 1 1 auto;
+		min-height: 72px;
+		height: auto;
+	}
+
+	.effect-use .intent-note,
+	.effect-use .pay-error {
+		margin: 0;
+	}
+
+	.effect-use .boost {
+		width: 100%;
+		margin: 0;
+	}
+
+	.extras-toggle {
+		background: none;
+		border: none;
+		box-shadow: none;
+		height: auto;
+		margin: 0;
+		padding: 4px 8px;
+		color: #ffe14a;
+		font-size: 1.2em;
+		font-weight: 600;
+		text-decoration: underline;
+		cursor: pointer;
+	}
+
+	.extras-toggle:hover {
+		color: #fff4a8;
 	}
 </style>

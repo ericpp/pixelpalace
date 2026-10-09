@@ -21,6 +21,8 @@ yarn-error.log*
 
 Dockerfile
 .dockerignore
+k8s
+docker-compose.yml
 README.md
 *.md
 

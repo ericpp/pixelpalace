@@ -1,0 +1,54 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    ports:
+      - "3003:3000"
+    env_file:
+      - .env
+    environment:
+      HOST: 0.0.0.0
+      PORT: 3000
+      # Compose Postgres wins over any remote DATABASE_URL in .env.
+      DATABASE_URL: postgres://boostbeach:boostbeach@db:5432/boostbeach
+      PUBLIC_LIVE_ENABLED: ${PUBLIC_LIVE_ENABLED:-true}
+      # Windows bind mounts rarely deliver inotify; Vite must poll.
+      CHOKIDAR_USEPOLLING: "true"
+      DOCKER_DEV: "true"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      # Host source -> container. Edits show up immediately via Vite HMR.
+      - .:/app
+      # Keep Linux node_modules in a volume so a Windows install does not replace them.
+      - app_node_modules:/app/node_modules
+    command:
+      - sh
+      - -c
+      - |
+        if [ ! -x node_modules/.bin/vite ]; then
+          if [ -f package-lock.json ]; then npm ci; else npm install; fi
+        fi
+        exec npm run dev -- --host 0.0.0.0 --port 3000
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: boostbeach
+      POSTGRES_PASSWORD: boostbeach
+      POSTGRES_DB: boostbeach
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U boostbeach -d boostbeach"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:
+  app_node_modules:

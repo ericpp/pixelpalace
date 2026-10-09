@@ -1,9 +1,38 @@
 import { sveltekit } from '@sveltejs/kit/vite';
-import { defineConfig } from 'vite';
+import { defineConfig, type ViteDevServer } from 'vite';
 import path from 'node:path';
 
+function liveWebSocketPlugin() {
+	const attach = async (server: ViteDevServer) => {
+		try {
+			const mod = (await server.ssrLoadModule('$lib/server/live/ws')) as {
+				attachLiveWebSocket: (httpServer: ViteDevServer['httpServer']) => void;
+			};
+			mod.attachLiveWebSocket(server.httpServer);
+		} catch (err) {
+			console.error('live websocket attach failed:', err);
+		}
+	};
+
+	return {
+		name: 'live-websocket',
+		configureServer(server: ViteDevServer) {
+			if (server.httpServer?.listening) {
+				void attach(server);
+				return;
+			}
+			server.httpServer?.once('listening', () => {
+				void attach(server);
+			});
+		}
+	};
+}
+
+const dockerDev = process.env.DOCKER_DEV === 'true';
+const port = Number(process.env.PORT) || (dockerDev ? 3000 : 3001);
+
 export default defineConfig({
-	plugins: [sveltekit()],
+	plugins: [sveltekit(), liveWebSocketPlugin()],
 	resolve: {
 		alias: {
 			$functions: path.resolve('src', 'lib', 'functions'),
@@ -14,10 +43,21 @@ export default defineConfig({
 		}
 	},
 	server: {
-		port: 3001,
+		host: true,
+		port,
+		strictPort: dockerDev,
 		watch: {
-			ignored: ['**/.vercel/**', '**/.git/**']
-		}
+			ignored: ['**/.vercel/**', '**/.git/**'],
+			usePolling: process.env.CHOKIDAR_USEPOLLING === 'true',
+			interval: 300
+		},
+		hmr: dockerDev
+			? {
+					host: 'localhost',
+					port,
+					clientPort: port
+				}
+			: undefined
 	},
 	preview: {
 		port: 3001

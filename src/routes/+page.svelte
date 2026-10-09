@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { onMount, type Component } from 'svelte';
+	import { onMount } from 'svelte';
+	import Desktop from './Desktop/Desktop.svelte';
 	import {
 		getRemoteServer,
 		getEventGuid,
@@ -17,38 +18,12 @@
 	const guid = getEventGuid();
 	const controlGuid = getEventGuid();
 
-	let isMobile = false;
 	let broadcastingBlock: Block = {};
 
 	let showConfetti = false;
 	let confettiAmount = 1;
-	let loaded = false;
-	let Layout: Component<{
-		guid: string;
-		broadcastingBlock: Block;
-		throwConfetti: (amount: number) => void;
-	}> | undefined;
-
-	async function loadLayout(mobile: boolean) {
-		const mod = mobile
-			? await import('./Mobile/Mobile.svelte')
-			: await import('./Desktop/Desktop.svelte');
-		Layout = mod.default;
-		loaded = true;
-	}
-
-	const checkScreenWidth = () => {
-		const mobile = window.innerWidth < 996;
-		if (mobile !== isMobile || !Layout) {
-			isMobile = mobile;
-			loadLayout(mobile);
-		}
-	};
 
 	onMount(() => {
-		checkScreenWidth();
-		window.addEventListener('resize', checkScreenWidth);
-
 		loadBlocks();
 		loadNostrEvent();
 		const url = getEventSocketUrl(controlGuid);
@@ -71,7 +46,6 @@
 		});
 
 		return () => {
-			window.removeEventListener('resize', checkScreenWidth);
 			socketPromise.then((socket) => socket.disconnect());
 		};
 	});
@@ -130,10 +104,8 @@
 	}
 </script>
 
-<div class="container" class:loaded>
-	{#if Layout}
-		<Layout {guid} {broadcastingBlock} {throwConfetti} />
-	{/if}
+<div class="container">
+	<Desktop {guid} {broadcastingBlock} {throwConfetti} />
 </div>
 
 {#if showConfetti}
@@ -153,10 +125,6 @@
 		height: 100%;
 		width: 100%;
 		overflow: hidden;
-		display: none;
-	}
-	.loaded {
-		display: initial;
 	}
 	.confetti {
 		position: absolute;

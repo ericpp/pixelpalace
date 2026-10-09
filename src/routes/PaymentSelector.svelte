@@ -8,7 +8,13 @@
 
 	import { page } from '$app/stores';
 
-	import { getAlbyOAuthUrl, getAlbyRedirectUri, isAlbyEnabled, user, wallet } from '$/stores';
+	import {
+		getAlbyOAuthUrl,
+		getAlbyRedirectUri,
+		isAlbyEnabled,
+		user,
+		wallet
+	} from '$/stores';
 	import { storeAlbyRedirectUri, storeAlbyCodeVerifier } from '$lib/albyOAuth';
 	import { generateCodeVerifier, generateCodeChallenge } from '$lib/pkce';
 	import { connectWallet } from '$lib/bitcoinConnect';
@@ -56,6 +62,9 @@
 		</p>
 
 		<div class="buttons">
+			<button disabled={connectingWallet} on:click={handleWalletClick}>
+				{connectingWallet ? 'Connecting…' : 'Wallet'}
+			</button>
 			{#if albyEnabled}
 				<button
 					on:click={() => {
@@ -75,9 +84,6 @@
 				}}
 			>
 				Scan QR Code
-			</button>
-			<button disabled={connectingWallet} on:click={handleWalletClick}>
-				{connectingWallet ? 'Connecting…' : 'Wallet'}
 			</button>
 			{#if paymentIntent !== 'zap'}
 				<button

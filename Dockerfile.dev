@@ -1,0 +1,19 @@
+# syntax=docker/dockerfile:1.7
+# Dev image: Vite + SvelteKit with bind-mounted source.
+FROM node:20-alpine
+
+WORKDIR /app
+
+COPY package.json package-lock.json* ./
+RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
+
+# Overwritten at runtime by the compose bind mount.
+COPY . .
+
+ENV HOST=0.0.0.0 \
+    PORT=3000 \
+    ADAPTER=node
+
+EXPOSE 3000
+
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "3000"]

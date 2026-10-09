@@ -2,6 +2,8 @@ import { writable } from 'svelte/store';
 import { env } from '$env/dynamic/public';
 import type {
 	Block,
+	EffectSlotState,
+	FiredEffect,
 	LnurlInvoiceResponse,
 	MainSettings,
 	ResolvedNostrEvent,
@@ -54,6 +56,27 @@ function optionalEnv(name: PublicEnvName): string | undefined {
 
 export function isAlbyEnabled(): boolean {
 	return Boolean(optionalEnv('PUBLIC_ALBY_CLIENT_ID'));
+}
+
+export function isLiveEnabled(): boolean {
+	return env.PUBLIC_LIVE_ENABLED?.trim() === 'true';
+}
+
+/** On-screen effect toast. Shown unless PUBLIC_EFFECT_TOAST is "false". */
+export function isEffectToastEnabled(): boolean {
+	return env.PUBLIC_EFFECT_TOAST?.trim().toLowerCase() !== 'false';
+}
+
+const DEFAULT_PLACEHOLDER_VIDEO = 'https://content.jwplatform.com/manifests/yp34SRmf.m3u8';
+
+/** Stand-in video when Split Kit has no live enclosure. On unless PUBLIC_PLACEHOLDER_VIDEO is "false". */
+export function isPlaceholderVideoEnabled(): boolean {
+	return env.PUBLIC_PLACEHOLDER_VIDEO?.trim().toLowerCase() !== 'false';
+}
+
+/** HLS or file URL used when the placeholder video is on and Split Kit has no live enclosure. */
+export function getPlaceholderVideoUrl(): string {
+	return optionalEnv('PUBLIC_PLACEHOLDER_VIDEO_URL') || DEFAULT_PLACEHOLDER_VIDEO;
 }
 
 export function getAlbyClientId(): string {
@@ -200,7 +223,7 @@ export function getNostrRelays(): string[] {
 }
 
 export function getDefaultBackgroundUrl(): string {
-	return 'https://images.pexels.com/photos/10819642/pexels-photo-10819642.jpeg';
+	return '/background.jpg';
 }
 
 export const albyReady = writable(false);
@@ -209,6 +232,21 @@ export const userReady = writable(false);
 export const user = writable<UserState>({ loggedIn: false });
 
 export const wallet = writable<WalletState>({ connected: false, balance: null, provider: null });
+
+export const effectSlots = writable<EffectSlotState[]>([]);
+export const effectSlotsUpdatedAt = writable(Date.now());
+export const livePlaying = writable(false);
+
+export function applyEffectSlots(effects: EffectSlotState[]): void {
+	effectSlots.set(effects);
+	effectSlotsUpdatedAt.set(Date.now());
+}
+
+export const firedEffect = writable<FiredEffect | null>(null);
+
+export function showFiredEffect(effect: FiredEffect): void {
+	firedEffect.set(effect);
+}
 
 export const liveBlocks = writable<Block[]>([]);
 export const mainSettings = writable<MainSettings>({

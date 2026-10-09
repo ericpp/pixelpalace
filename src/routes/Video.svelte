@@ -2,10 +2,22 @@
 	import type Hls from 'hls.js';
 	import { onMount } from 'svelte';
 
-	import { mainSettings, getEventGuid, getEventSocketUrl } from '$/stores';
+	import {
+		mainSettings,
+		getEventGuid,
+		getEventSocketUrl,
+		isLiveEnabled,
+		isPlaceholderVideoEnabled,
+		getPlaceholderVideoUrl
+	} from '$/stores';
 	import { loadHls } from '$lib/hls';
 	import { connectEventSocket } from '$lib/socket';
+	import { setLivePlaying } from '$lib/liveSocket';
 	import type { Block } from '$lib/types';
+
+	const liveEnabled = isLiveEnabled();
+	const placeholderEnabled = isPlaceholderVideoEnabled();
+	const placeholderVideo = getPlaceholderVideoUrl();
 
 	export let guid = getEventGuid();
 
@@ -13,7 +25,7 @@
 	let block: Block | undefined;
 	let hls: Hls | undefined;
 	let sourceToken = 0;
-	$: sourceVideo = $mainSettings?.liveEnclosure || '';
+	$: sourceVideo = $mainSettings?.liveEnclosure || (placeholderEnabled ? placeholderVideo : '');
 	// sourceVideo = 'https://listen.noagendastream.com/noagenda';
 
 	$: setSource(sourceVideo, player);
@@ -23,20 +35,21 @@
 	async function setSource(src: string, el?: HTMLVideoElement) {
 		console.log(el);
 		console.log(src);
-		if (!el || !src) return;
+		if (!el) return;
 
 		const token = ++sourceToken;
 		hls?.destroy();
 		hls = undefined;
 
-		// src =
-		// 	'https://noagendatube.com/static/streaming-playlists/hls/54ebb881-8581-4b16-b3ba-04dcac230fd4/master.m3u8';
-
-		// src = 'https://content.jwplatform.com/manifests/yp34SRmf.m3u8';
-		console.log(src);
+		if (!src) {
+			el.removeAttribute('src');
+			el.load();
+			return;
+		}
 		if (src.includes('.m3u8')) {
 			if (el.canPlayType('application/vnd.apple.mpegurl')) {
 				el.src = src;
+				void el.play().catch(() => {});
 				return;
 			}
 
@@ -53,7 +66,7 @@
 				instance.loadSource(src);
 				instance.on(HlsPlayer.Events.MANIFEST_PARSED, function (_event, data) {
 					console.log('manifest loaded, found ' + data.levels.length + ' quality level');
-					el.play();
+					void el.play().catch(() => {});
 				});
 			});
 			return;
@@ -61,6 +74,21 @@
 
 		el.src = src;
 		el.play();
+	}
+
+	function replayFromStart() {
+		if (!player) return;
+		player.currentTime = 0;
+		hls?.startLoad();
+		void player.play();
+	}
+
+	function syncLivePlaying() {
+		if (!liveEnabled) return;
+		const active = Boolean(
+			player && !player.paused && !player.ended && document.visibilityState === 'visible'
+		);
+		setLivePlaying(active);
 	}
 
 	onMount(() => {
@@ -77,10 +105,25 @@
 			});
 		});
 
+		if (liveEnabled) {
+			player?.addEventListener('playing', syncLivePlaying);
+			player?.addEventListener('pause', syncLivePlaying);
+			player?.addEventListener('ended', syncLivePlaying);
+			document.addEventListener('visibilitychange', syncLivePlaying);
+			syncLivePlaying();
+		}
+
 		return () => {
 			sourceToken += 1;
 			hls?.destroy();
 			hls = undefined;
+			if (liveEnabled) {
+				setLivePlaying(false);
+				player?.removeEventListener('playing', syncLivePlaying);
+				player?.removeEventListener('pause', syncLivePlaying);
+				player?.removeEventListener('ended', syncLivePlaying);
+				document.removeEventListener('visibilitychange', syncLivePlaying);
+			}
 			socketPromise.then((socket) => socket.disconnect());
 		};
 	});
@@ -104,7 +147,11 @@
 			disableRemotePlayback
 			playsinline
 			controls
+			loop
 			preload="metadata"
+			on:playing={syncLivePlaying}
+			on:pause={syncLivePlaying}
+			on:ended={replayFromStart}
 			bind:this={player}
 		></video>
 	</div>
@@ -117,6 +164,8 @@
 		justify-content: center;
 		align-items: center;
 		width: 100%;
+		height: 100%;
+		min-height: 0;
 		overflow: hidden;
 	}
 	.player {
@@ -124,15 +173,20 @@
 		justify-content: center;
 		align-items: center;
 		width: 100%;
+		height: 100%;
+		min-height: 0;
 		overflow: hidden;
+		position: relative;
+		background: #000;
 	}
 
 	video {
 		max-width: 100%;
 		max-height: 100%;
-		width: auto;
-		height: auto;
+		width: 100%;
+		height: 100%;
 		object-fit: contain;
+		background: #000;
 	}
 	.audio {
 		height: 50px;
