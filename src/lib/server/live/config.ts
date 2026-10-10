@@ -22,9 +22,9 @@ export function getDatabaseUrl(): string | undefined {
 }
 
 export function getViewerJwtSecret(): string {
-	const secret = trim(env.VIEWER_JWT) || trim(env.ALBY_JWT);
+	const secret = trim(env.VIEWER_JWT);
 	if (!secret) {
-		error(500, 'VIEWER_JWT or ALBY_JWT is not configured');
+		error(500, 'VIEWER_JWT is not configured');
 	}
 	return secret.split(/\s+/)[0];
 }
