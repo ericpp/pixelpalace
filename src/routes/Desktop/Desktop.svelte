@@ -143,7 +143,7 @@
 		width: 100%;
 		box-sizing: border-box;
 		display: grid;
-		grid-template-columns: minmax(168px, 240px) minmax(0, 1fr) minmax(240px, 340px);
+		grid-template-columns: minmax(220px, 300px) minmax(0, 1fr) minmax(240px, 340px);
 		grid-template-rows: auto minmax(0, 1fr) clamp(108px, 16vh, 148px);
 		grid-template-areas:
 			'bar bar bar'
