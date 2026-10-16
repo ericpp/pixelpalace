@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import Close from '$lib/icons/Close.svelte';
 	import { disconnectWallet, releaseWalletSession } from '$lib/bitcoinConnect';
+	import { logoutAlby } from '$lib/functions/refreshAlbyToken';
 	import type { PaymentType } from '$lib/types';
 
 	export let closeModal = () => {};
@@ -15,8 +16,12 @@
 	export let paymentType: PaymentType | undefined = undefined;
 
 	async function handleDisconnectWallet() {
-		await disconnectWallet();
-		releaseWalletSession();
+		if (paymentType === 'alby') {
+			await logoutAlby();
+		} else {
+			await disconnectWallet();
+			releaseWalletSession();
+		}
 		paymentType = '';
 	}
 
@@ -70,7 +75,7 @@
 						paymentType = '';
 					}}>Change Payment Type</button
 				>
-				{#if paymentType === 'wallet'}
+				{#if paymentType === 'wallet' || paymentType === 'alby'}
 					<button
 						class="new-payment-type"
 						style={`

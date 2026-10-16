@@ -43,3 +43,14 @@ export default async function refreshAlbyToken(): Promise<boolean> {
 		return false;
 	}
 }
+
+/** Clear the Alby session cookie and the local logged-in state. */
+export async function logoutAlby(): Promise<void> {
+	try {
+		await fetch(getAlbyServer() + '/api/alby/logout', { credentials: 'include' });
+	} catch (err) {
+		console.error('Error logging out of Alby:', err);
+	}
+	lastRefreshTime = 0;
+	user.set({ loggedIn: false });
+}

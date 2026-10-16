@@ -2,6 +2,7 @@
 	import { page } from '$app/stores';
 	import { connectWallet, disconnectWallet } from '$lib/bitcoinConnect';
 	import { startAlbyLogin } from '$lib/albyOAuth';
+	import { logoutAlby } from '$lib/functions/refreshAlbyToken';
 	import { getAlbyRedirectUri, getAppName, isAlbyEnabled, user, wallet } from '$/stores';
 
 	export let nowPlaying: string | undefined = undefined;
@@ -15,10 +16,10 @@
 	let connectMenuOpen = false;
 	let walletControl: HTMLElement;
 
+	$: anyConnected = $wallet.connected || $user.loggedIn;
 	$: satBalance = $wallet.connected
 		? Math.floor($wallet.balance ?? 0)
 		: Math.floor($user.balance ?? 0);
-	$: showSats = $wallet.connected || $user.loggedIn;
 
 	async function handleConnect() {
 		connectMenuOpen = false;
@@ -35,6 +36,11 @@
 	async function handleDisconnect() {
 		menuOpen = false;
 		await disconnectWallet();
+	}
+
+	async function handleAlbyDisconnect() {
+		menuOpen = false;
+		await logoutAlby();
 	}
 
 	async function handleAlbyConnect() {
@@ -69,7 +75,7 @@
 
 	<div class="actions">
 		<div class="wallet" bind:this={walletControl}>
-			{#if $wallet.connected}
+			{#if anyConnected}
 				<button
 					class="chip sats"
 					aria-haspopup="menu"
@@ -80,15 +86,19 @@
 				</button>
 				{#if menuOpen}
 					<div class="menu" role="menu">
-						<button role="menuitem" on:click={handleDisconnect}>Disconnect wallet</button>
+						{#if $wallet.connected}
+							<button role="menuitem" on:click={handleDisconnect}>
+								{$user.loggedIn ? 'Disconnect NWC wallet' : 'Disconnect wallet'}
+							</button>
+						{/if}
+						{#if $user.loggedIn}
+							<button role="menuitem" on:click={handleAlbyDisconnect}>
+								{$wallet.connected ? 'Disconnect Alby' : 'Disconnect wallet'}
+							</button>
+						{/if}
 					</div>
 				{/if}
 			{:else}
-				{#if showSats}
-					<span class="chip sats" title="Alby balance">
-						⚡ {satBalance.toLocaleString()} {satBalance === 1 ? 'sat' : 'sats'}
-					</span>
-				{/if}
 				<button
 					class="connect"
 					disabled={connecting}

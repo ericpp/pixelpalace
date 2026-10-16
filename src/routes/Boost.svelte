@@ -3,7 +3,7 @@
 	import Venmo from './Venmo.svelte';
 	import PaymentSelector from './PaymentSelector.svelte';
 	import type { Block, PaymentIntent, PaymentType } from '$lib/types';
-	import { isNostrEventConfigured, nostrEvent, wallet } from '$/stores';
+	import { isNostrEventConfigured, nostrEvent, user, wallet } from '$/stores';
 	import { lockEffectSlot } from '$lib/functions/sendEffectBoost';
 	import { nostrEventHref } from '$lib/nostr/resolveEvent';
 
@@ -22,8 +22,14 @@
 	let satAmount: number | undefined = undefined;
 	let armedEffectId = '';
 
+	function defaultPaymentType(): PaymentType | undefined {
+		if ($wallet.connected) return 'wallet';
+		if ($user.loggedIn) return 'alby';
+		return undefined;
+	}
+
 	$: if (showModal && !modalWasOpen) {
-		paymentType = $wallet.connected ? 'wallet' : undefined;
+		paymentType = defaultPaymentType();
 		satAmount = undefined;
 		armedEffectId = '';
 		modalWasOpen = true;
@@ -33,10 +39,12 @@
 		armedEffectId = '';
 	}
 
-	// A persisted wallet can finish connecting after the modal opens. Only fill
-	// the initial unset state so Change Payment Type (empty string) stays put.
-	$: if (showModal && paymentType === undefined && $wallet.connected) {
-		paymentType = 'wallet';
+	// A persisted wallet or Alby session can finish connecting after the modal
+	// opens. Only fill the initial unset state so Change Payment Type (empty
+	// string) stays put.
+	$: if (showModal && paymentType === undefined && ($wallet.connected || $user.loggedIn)) {
+		const next = defaultPaymentType();
+		if (next) paymentType = next;
 	}
 
 	function attachSats(amount: number) {
