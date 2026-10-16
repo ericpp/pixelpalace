@@ -17,6 +17,7 @@ function loadBitcoinConnect() {
 
 async function refreshWalletBalance(provider: WalletProvider): Promise<void> {
 	wallet.update((state) => ({ ...state, connected: true, provider }));
+	void rememberWalletName(provider);
 
 	if (!provider?.getBalance) return;
 
@@ -28,9 +29,41 @@ async function refreshWalletBalance(provider: WalletProvider): Promise<void> {
 	}
 }
 
+function connectorTitle(name: string | undefined): string | null {
+	const trimmed = name?.trim();
+	if (!trimmed || trimmed.toLowerCase() === 'nwc') return null;
+	return trimmed;
+}
+
+/** Wallet name from NWC get_info, falling back to the Bitcoin Connect connector title. */
+async function rememberWalletName(provider: WalletProvider): Promise<void> {
+	const bc = await loadBitcoinConnect();
+	const connectorName = connectorTitle(bc?.getConnectorConfig?.()?.connectorName);
+	if (connectorName) {
+		wallet.update((state) => ({ ...state, name: connectorName }));
+	}
+
+	if (!provider.getInfo) return;
+
+	try {
+		const info = await provider.getInfo();
+		const alias = connectorTitle(info?.alias) ?? connectorTitle(info?.node?.alias);
+		if (alias) {
+			wallet.update((state) => ({ ...state, name: alias }));
+		}
+	} catch {
+		// Connector title remains when the wallet does not report an alias.
+	}
+}
+
 function setConnectedProvider(provider: WalletProvider | null): void {
 	connectedProvider = provider;
-	wallet.update((state) => ({ ...state, provider, connected: !!provider }));
+	wallet.update((state) => ({
+		...state,
+		provider,
+		connected: !!provider,
+		name: provider ? state.name : null
+	}));
 }
 
 export async function setupBitcoinConnect(): Promise<void> {
@@ -111,7 +144,7 @@ export async function disconnectWallet(): Promise<void> {
 
 	walletSessionLocked = false;
 	connectedProvider = null;
-	wallet.set({ connected: false, balance: null, provider: null });
+	wallet.set({ connected: false, balance: null, provider: null, name: null });
 }
 
 export async function refreshConnectedWalletBalance(): Promise<void> {

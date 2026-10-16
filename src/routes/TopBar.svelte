@@ -88,13 +88,11 @@
 					<div class="menu" role="menu">
 						{#if $wallet.connected}
 							<button role="menuitem" on:click={handleDisconnect}>
-								{$user.loggedIn ? 'Disconnect NWC wallet' : 'Disconnect wallet'}
+								Disconnect {$wallet.name ?? 'NWC'}
 							</button>
 						{/if}
 						{#if $user.loggedIn}
-							<button role="menuitem" on:click={handleAlbyDisconnect}>
-								{$wallet.connected ? 'Disconnect Alby' : 'Disconnect wallet'}
-							</button>
+							<button role="menuitem" on:click={handleAlbyDisconnect}>Disconnect Alby</button>
 						{/if}
 					</div>
 				{/if}

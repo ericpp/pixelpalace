@@ -302,7 +302,12 @@ export const userReady = writable(false);
 
 export const user = writable<UserState>({ loggedIn: false });
 
-export const wallet = writable<WalletState>({ connected: false, balance: null, provider: null });
+export const wallet = writable<WalletState>({
+	connected: false,
+	balance: null,
+	provider: null,
+	name: null
+});
 
 export const effectSlots = writable<EffectSlotState[]>([]);
 export const effectSlotsUpdatedAt = writable(Date.now());

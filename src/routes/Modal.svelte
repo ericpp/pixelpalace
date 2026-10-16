@@ -3,6 +3,7 @@
 	import Close from '$lib/icons/Close.svelte';
 	import { disconnectWallet, releaseWalletSession } from '$lib/bitcoinConnect';
 	import { logoutAlby } from '$lib/functions/refreshAlbyToken';
+	import { wallet } from '$/stores';
 	import type { PaymentType } from '$lib/types';
 
 	export let closeModal = () => {};
@@ -82,7 +83,10 @@
 			
 			${closeColor ? `color: ${closeColor};` : ''}
 		`}
-						on:click={handleDisconnectWallet}>Disconnect Wallet</button
+						on:click={handleDisconnectWallet}
+						>{paymentType === 'alby'
+							? 'Disconnect Alby'
+							: `Disconnect ${$wallet.name ?? 'NWC'}`}</button
 					>
 				{/if}
 			</div>

@@ -62,6 +62,7 @@ export interface FiredEffect {
 
 export interface WalletProvider {
 	getBalance?: () => Promise<{ balance: number }>;
+	getInfo?: () => Promise<{ alias?: string; node?: { alias?: string } }>;
 	keysend?: (params: {
 		destination: string;
 		amount: number;
@@ -74,6 +75,8 @@ export interface WalletState {
 	connected: boolean;
 	balance: number | null;
 	provider: WalletProvider | null;
+	/** Display name reported by the NWC wallet, or the connector title. */
+	name: string | null;
 }
 
 export interface BoostPayment {
