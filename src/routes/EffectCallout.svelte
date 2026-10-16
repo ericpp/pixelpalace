@@ -1,21 +1,9 @@
 <script lang="ts">
 	import { onDestroy } from 'svelte';
 	import { firedEffect } from '$/stores';
-	import type { EffectId } from '$lib/effects';
-
-	const props: Record<EffectId, string> = {
-		wide: '/props/telescope.png',
-		dj: '/props/dj.png',
-		festoons: '/props/festoons.png',
-		bubbles: '/props/bubbles.png',
-		mystery: '/props/mystery.png'
-	};
+	import { EFFECT_ICONS, isEffectId } from '$lib/effects';
 
 	let timer: ReturnType<typeof setTimeout> | undefined;
-
-	function isEffectId(value: string): value is EffectId {
-		return value in props;
-	}
 
 	$: if ($firedEffect) {
 		if (timer) clearTimeout(timer);
@@ -32,7 +20,7 @@
 {#if $firedEffect}
 	<div class="callout" role="status">
 		{#if isEffectId($firedEffect.id)}
-			<img src={props[$firedEffect.id]} alt="" />
+			<img src={EFFECT_ICONS[$firedEffect.id]} alt="" />
 		{/if}
 		<div class="copy">
 			<p class="label">{$firedEffect.label}</p>

@@ -15,10 +15,11 @@
 
 	const layout: Record<EffectId, Omit<Effect['prop'], 'src'>> = {
 		wide: { h: 84, x: 50, sink: 26 },
+		bubbles: { h: 86, x: 50, sink: 30 },
+		fence: { h: 72, x: 50, sink: 30 },
 		dj: { h: 58, x: 50, sink: 20 },
 		festoons: { h: 66, x: 50, sink: 36 },
-		bubbles: { h: 86, x: 50, sink: 30 },
-		mystery: { h: 96, x: 50, sink: 36 }
+		discoball: { h: 96, x: 50, sink: 36 }
 	};
 
 	const effects: Effect[] = (Object.keys(layout) as EffectId[]).map((id) => ({
@@ -312,7 +313,7 @@
 		min-width: 0;
 		height: auto;
 		display: grid;
-		grid-template-columns: repeat(5, minmax(0, 1fr));
+		grid-template-columns: repeat(6, minmax(0, 1fr));
 		gap: 12px;
 		box-sizing: border-box;
 	}
@@ -409,7 +410,8 @@
 		transform-origin: 48% 90%;
 	}
 
-	.prop.festoons {
+	.prop.festoons,
+	.prop.discoball {
 		transform-origin: 50% 6%;
 	}
 
@@ -433,9 +435,14 @@
 		animation: prop-bubbles 1.7s ease-in-out infinite;
 	}
 
-	.slot:hover:not(:disabled) .prop.mystery,
-	.slot:focus-visible:not(:disabled) .prop.mystery {
-		animation: prop-mystery 0.4s linear infinite;
+	.slot:hover:not(:disabled) .prop.fence,
+	.slot:focus-visible:not(:disabled) .prop.fence {
+		animation: prop-fence 0.9s steps(3) infinite;
+	}
+
+	.slot:hover:not(:disabled) .prop.discoball,
+	.slot:focus-visible:not(:disabled) .prop.discoball {
+		animation: prop-discoball 1.4s ease-in-out infinite;
 	}
 
 	@keyframes prop-wide {
@@ -497,22 +504,31 @@
 		}
 	}
 
-	@keyframes prop-mystery {
+	@keyframes prop-fence {
 		0%,
 		100% {
-			transform: translateX(-50%) translate(0, 0) rotate(0deg);
+			filter: drop-shadow(2px 3px 0 rgba(0, 0, 0, 0.45)) brightness(1) hue-rotate(0deg);
 		}
-		20% {
-			transform: translateX(-50%) translate(-3px, -1px) rotate(-4deg);
+		33% {
+			filter: drop-shadow(0 0 8px rgba(255, 90, 220, 0.8))
+				drop-shadow(2px 3px 0 rgba(0, 0, 0, 0.45)) brightness(1.35) hue-rotate(120deg);
 		}
-		40% {
-			transform: translateX(-50%) translate(3px, 0) rotate(4deg);
+		66% {
+			filter: drop-shadow(0 0 8px rgba(90, 230, 255, 0.8))
+				drop-shadow(2px 3px 0 rgba(0, 0, 0, 0.45)) brightness(1.2) hue-rotate(240deg);
 		}
-		60% {
-			transform: translateX(-50%) translate(-2px, -3px) rotate(-2deg);
+	}
+
+	@keyframes prop-discoball {
+		0%,
+		100% {
+			transform: translateX(-50%) rotate(-6deg);
+			filter: drop-shadow(2px 3px 0 rgba(0, 0, 0, 0.45)) brightness(1);
 		}
-		80% {
-			transform: translateX(-50%) translate(2px, 0) rotate(3deg);
+		50% {
+			transform: translateX(-50%) rotate(6deg);
+			filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.9))
+				drop-shadow(2px 3px 0 rgba(0, 0, 0, 0.45)) brightness(1.4);
 		}
 	}
 
