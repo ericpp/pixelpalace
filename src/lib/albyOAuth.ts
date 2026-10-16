@@ -1,6 +1,18 @@
+import { getAlbyOAuthUrl } from '$/stores';
+import { generateCodeChallenge, generateCodeVerifier } from '$lib/pkce';
+
 const REDIRECT_URI_KEY = 'alby_redirect_uri';
 const CODE_VERIFIER_KEY = 'alby_code_verifier';
 const CODE_PREFIX = 'alby_code_used:';
+
+/** Start the Alby OAuth login, storing the PKCE verifier and redirect URI first. */
+export async function startAlbyLogin(redirectUri: string): Promise<void> {
+	const verifier = generateCodeVerifier();
+	const challenge = await generateCodeChallenge(verifier);
+	storeAlbyRedirectUri(redirectUri);
+	storeAlbyCodeVerifier(verifier);
+	window.location.href = getAlbyOAuthUrl(redirectUri, { codeChallenge: challenge });
+}
 
 export function storeAlbyRedirectUri(redirectUri: string): void {
 	sessionStorage.setItem(REDIRECT_URI_KEY, redirectUri);

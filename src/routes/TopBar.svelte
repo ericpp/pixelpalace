@@ -1,14 +1,18 @@
 <script lang="ts">
+	import { page } from '$app/stores';
 	import { connectWallet, disconnectWallet } from '$lib/bitcoinConnect';
-	import { getAppName, user, wallet } from '$/stores';
+	import { startAlbyLogin } from '$lib/albyOAuth';
+	import { getAlbyRedirectUri, getAppName, isAlbyEnabled, user, wallet } from '$/stores';
 
 	export let nowPlaying: string | undefined = undefined;
 	export let onHowTo: () => void = () => {};
 
 	const appName = getAppName();
+	const albyEnabled = isAlbyEnabled();
 
 	let connecting = false;
 	let menuOpen = false;
+	let connectMenuOpen = false;
 	let walletControl: HTMLElement;
 
 	$: satBalance = $wallet.connected
@@ -17,6 +21,7 @@
 	$: showSats = $wallet.connected || $user.loggedIn;
 
 	async function handleConnect() {
+		connectMenuOpen = false;
 		connecting = true;
 		try {
 			await connectWallet();
@@ -32,9 +37,19 @@
 		await disconnectWallet();
 	}
 
+	async function handleAlbyConnect() {
+		connectMenuOpen = false;
+		await startAlbyLogin(getAlbyRedirectUri($page.url));
+	}
+
 	function handleWindowClick(event: MouseEvent) {
-		if (menuOpen && walletControl && !walletControl.contains(event.target as Node)) {
+		if (
+			(menuOpen || connectMenuOpen) &&
+			walletControl &&
+			!walletControl.contains(event.target as Node)
+		) {
 			menuOpen = false;
+			connectMenuOpen = false;
 		}
 	}
 </script>
@@ -74,9 +89,23 @@
 						⚡ {satBalance.toLocaleString()} {satBalance === 1 ? 'sat' : 'sats'}
 					</span>
 				{/if}
-				<button class="connect" disabled={connecting} on:click={handleConnect}>
-					{connecting ? 'Connecting…' : 'Connect Wallet'}
+				<button
+					class="connect"
+					disabled={connecting}
+					aria-haspopup="menu"
+					aria-expanded={connectMenuOpen}
+					on:click={() => (connectMenuOpen = !connectMenuOpen)}
+				>
+					{connecting ? 'Connecting…' : 'Connect Wallet ▾'}
 				</button>
+				{#if connectMenuOpen}
+					<div class="menu" role="menu">
+						<button role="menuitem" on:click={handleConnect}>Connect NWC wallet</button>
+						{#if albyEnabled && !$user.loggedIn}
+							<button role="menuitem" on:click={handleAlbyConnect}>Connect Alby wallet</button>
+						{/if}
+					</div>
+				{/if}
 			{/if}
 		</div>
 
@@ -206,7 +235,7 @@
 		top: calc(100% + 6px);
 		right: 0;
 		z-index: 20;
-		min-width: 170px;
+		min-width: 210px;
 		padding: 6px;
 		background: rgba(20, 20, 24, 0.95);
 		border-radius: 10px;
@@ -226,6 +255,7 @@
 		font-size: 1rem;
 		font-weight: 600;
 		text-align: left;
+		white-space: nowrap;
 		cursor: pointer;
 	}
 

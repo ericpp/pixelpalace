@@ -9,7 +9,6 @@
 	import { page } from '$app/stores';
 
 	import {
-		getAlbyOAuthUrl,
 		getAlbyRedirectUri,
 		getPayPalUrl,
 		isAlbyEnabled,
@@ -18,8 +17,7 @@
 		user,
 		wallet
 	} from '$/stores';
-	import { storeAlbyRedirectUri, storeAlbyCodeVerifier } from '$lib/albyOAuth';
-	import { generateCodeVerifier, generateCodeChallenge } from '$lib/pkce';
+	import { startAlbyLogin } from '$lib/albyOAuth';
 	import { connectWallet } from '$lib/bitcoinConnect';
 
 	let connectingWallet = false;
@@ -31,14 +29,6 @@
 
 	function openPayPal() {
 		window.open(getPayPalUrl(), '_blank', 'noopener,noreferrer');
-	}
-
-	async function startAlbyLogin() {
-		const verifier = generateCodeVerifier();
-		const challenge = await generateCodeChallenge(verifier);
-		storeAlbyRedirectUri(redirectUri);
-		storeAlbyCodeVerifier(verifier);
-		window.location.href = getAlbyOAuthUrl(redirectUri, { codeChallenge: challenge });
 	}
 
 	async function handleWalletClick() {
@@ -80,7 +70,7 @@
 						if ($user.loggedIn) {
 							paymentType = 'alby';
 						} else {
-							startAlbyLogin();
+							startAlbyLogin(redirectUri);
 						}
 					}}
 				>
