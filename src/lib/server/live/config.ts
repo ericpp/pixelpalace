@@ -53,6 +53,43 @@ export function getEpisodeGuid(): string | undefined {
 	return trim(env.EPISODE_GUID);
 }
 
+function unique(values: Array<string | undefined>): string[] {
+	const seen = new Set<string>();
+	const out: string[] = [];
+	for (const value of values) {
+		if (value && !seen.has(value)) {
+			seen.add(value);
+			out.push(value);
+		}
+	}
+	return out;
+}
+
+function csv(value: string | undefined): string[] {
+	const trimmed = trim(value);
+	if (!trimmed) return [];
+	return unique(trimmed.split(',').map((part) => part.trim()));
+}
+
+/** Podcast and event identity the boost board scores against. */
+export function getBoardScope(): {
+	podcasts: string[];
+	eventGuids: string[];
+	episodeGuids: string[];
+} {
+	const podcasts = csv(publicEnv.PUBLIC_BOARD_PODCASTS);
+	const eventGuids = csv(publicEnv.PUBLIC_BOARD_EVENT_GUIDS);
+	const episodeGuids = csv(publicEnv.PUBLIC_BOARD_EPISODE_GUIDS);
+
+	return {
+		podcasts: podcasts.length
+			? podcasts
+			: unique([getPodcastName(), trim(publicEnv.PUBLIC_APP_NAME)]),
+		eventGuids: eventGuids.length ? eventGuids : unique([trim(publicEnv.PUBLIC_EVENT_GUID)]),
+		episodeGuids: episodeGuids.length ? episodeGuids : unique([getEpisodeGuid()])
+	};
+}
+
 export function getNostrRelays(): string[] {
 	const configured = trim(env.PUBLISH_NOSTR_RELAYS) || trim(publicEnv.PUBLIC_NOSTR_RELAYS);
 	if (configured) {

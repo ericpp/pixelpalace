@@ -4,7 +4,13 @@ declare global {
 	namespace App {
 		// interface Error {}
 		// interface Locals {}
-		// interface PageData {}
+		interface PageData {
+			boardScope: {
+				podcasts: string[];
+				eventGuids: string[];
+				episodeGuids: string[];
+			};
+		}
 		// interface PageState {}
 		// interface Platform {}
 	}

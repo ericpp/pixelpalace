@@ -54,6 +54,15 @@ function optionalEnv(name: PublicEnvName): string | undefined {
 	return value || undefined;
 }
 
+function csvEnv(name: PublicEnvName): string[] {
+	const value = optionalEnv(name);
+	if (!value) return [];
+	return value
+		.split(',')
+		.map((part) => part.trim())
+		.filter(Boolean);
+}
+
 export function isAlbyEnabled(): boolean {
 	return Boolean(optionalEnv('PUBLIC_ALBY_CLIENT_ID'));
 }
@@ -232,6 +241,56 @@ export function getNostrRelays(): string[] {
 		.split(',')
 		.map((url) => url.trim())
 		.filter(Boolean);
+}
+
+const DEFAULT_BOARD_RELAYS = [
+	'wss://relay.damus.io',
+	'wss://nos.lol',
+	'wss://relay.primal.net',
+	'wss://nostr-pub.wellorder.net',
+	'wss://nostr.oxtr.dev'
+];
+
+export interface BoardSettings {
+	nostrPubkey?: string;
+	zapEvent?: string;
+	after?: string;
+	before?: string;
+	podcasts: string[];
+	eventGuids: string[];
+	episodeGuids: string[];
+	relays: string[];
+}
+
+export function getBoardRelays(): string[] {
+	const configured = csvEnv('PUBLIC_BOARD_RELAYS');
+	return configured.length ? configured : DEFAULT_BOARD_RELAYS;
+}
+
+/** Boost-board sources. Podcast and event identity comes from the server scope. */
+export function getBoardSettings(
+	scope: Pick<BoardSettings, 'podcasts' | 'eventGuids' | 'episodeGuids'>
+): BoardSettings {
+	return {
+		nostrPubkey: optionalEnv('PUBLIC_BOARD_NOSTR_PUBKEY'),
+		zapEvent: optionalEnv('PUBLIC_BOARD_ZAP_EVENT'),
+		after: optionalEnv('PUBLIC_BOARD_AFTER'),
+		before: optionalEnv('PUBLIC_BOARD_BEFORE'),
+		podcasts: scope.podcasts,
+		eventGuids: scope.eventGuids,
+		episodeGuids: scope.episodeGuids,
+		relays: getBoardRelays()
+	};
+}
+
+export function isBoardConfigured(settings: BoardSettings): boolean {
+	return Boolean(
+		settings.nostrPubkey ||
+			settings.zapEvent ||
+			settings.podcasts.length ||
+			settings.eventGuids.length ||
+			settings.episodeGuids.length
+	);
 }
 
 export function getDefaultBackgroundUrl(): string {

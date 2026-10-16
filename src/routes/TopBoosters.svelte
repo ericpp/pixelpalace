@@ -1,12 +1,42 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
+	import { page } from '$app/stores';
+	import { startBoostBoard, testBoost, topBoosters } from '$lib/boostBoard';
+	import { getBoardSettings, isBoardConfigured } from '$/stores';
+
 	const slots = [
+		{ width: 100 },
+		{ width: 96 },
+		{ width: 100 },
 		{ width: 94 },
-		{ width: 72 },
-		{ width: 86 },
-		{ width: 64 },
-		{ width: 98 },
-		{ width: 78 }
+		{ width: 100 },
+		{ width: 97 }
 	];
+
+	onMount(() => {
+		if (import.meta.env.DEV) {
+			(
+				window as Window & { testBoost?: (name: string, sats: number) => void }
+			).testBoost = testBoost;
+		}
+
+		const settings = getBoardSettings($page.data.boardScope);
+		if (!isBoardConfigured(settings)) {
+			return () => {
+				if (import.meta.env.DEV) {
+					delete (window as Window & { testBoost?: (name: string, sats: number) => void }).testBoost;
+				}
+			};
+		}
+
+		const stop = startBoostBoard({ ...settings, slots: slots.length });
+		return () => {
+			stop();
+			if (import.meta.env.DEV) {
+				delete (window as Window & { testBoost?: (name: string, sats: number) => void }).testBoost;
+			}
+		};
+	});
 </script>
 
 <section class="signpost" aria-label="Top boosters">
@@ -17,8 +47,13 @@
 			<span class="title-text">Top Boosters</span>
 		</div>
 		{#each slots as slot, i (i)}
+			{@const score = $topBoosters[i]}
 			<div class="plank arrow" style="--w: {slot.width}">
 				<span class="nail"></span>
+				{#if score}
+					<span class="name" title={score.name}>{score.name}</span>
+					<span class="sats">{score.sats.toLocaleString()}</span>
+				{/if}
 			</div>
 		{/each}
 	</div>
@@ -30,6 +65,7 @@
 		height: 100%;
 		min-height: 0;
 		width: 100%;
+		container-type: inline-size;
 	}
 
 	.post {
@@ -72,7 +108,7 @@
 		background-image: url('/plank.png');
 		clip-path: var(--shape);
 		font-family: var(--font-pixel);
-		font-weight: 700;
+		font-weight: 600;
 		-webkit-text-stroke: 4px #000;
 		paint-order: stroke fill;
 		text-shadow:
@@ -100,7 +136,7 @@
 		justify-content: center;
 		padding: 6px 12px 6px 24px;
 		box-sizing: border-box;
-		font-size: clamp(17px, 1.6vw, 24px);
+		font-size: clamp(18px, 7cqi, 22px);
 		line-height: 1;
 		text-align: center;
 	}
@@ -111,14 +147,36 @@
 	}
 
 	.arrow {
-		--shape: polygon(0 0, 86% 0, 100% 50%, 86% 100%, 0 100%);
+		--shape: polygon(0 0, 90% 0, 100% 50%, 90% 100%, 0 100%);
 		margin-left: 12px;
 		width: calc(var(--w) * 1%);
-		height: clamp(38px, 7vh, 54px);
-		padding: 0 18% 0 30px;
+		height: clamp(54px, 9vh, 66px);
+		padding: 4px 34px 4px 28px;
 		box-sizing: border-box;
-		font-size: clamp(14px, 1.3vw, 20px);
-		line-height: 1.1;
+		flex-direction: column;
+		align-items: flex-start;
+		justify-content: center;
+		gap: 1px;
+		font-size: clamp(18px, 6.5cqi, 21px);
+		line-height: 1.05;
+	}
+
+	.name,
+	.sats {
+		position: relative;
+		z-index: 1;
+		max-width: 100%;
+	}
+
+	.name {
+		overflow: hidden;
+		white-space: nowrap;
+		text-overflow: ellipsis;
+	}
+
+	.sats {
+		color: #ffe14a;
+		font-size: 1em;
 	}
 
 	.nail {
