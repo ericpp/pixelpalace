@@ -11,7 +11,10 @@
 	import {
 		getAlbyOAuthUrl,
 		getAlbyRedirectUri,
+		getPayPalUrl,
 		isAlbyEnabled,
+		isPayPalEnabled,
+		isVenmoEnabled,
 		user,
 		wallet
 	} from '$/stores';
@@ -22,7 +25,13 @@
 	let connectingWallet = false;
 
 	const albyEnabled = isAlbyEnabled();
+	const venmoEnabled = isVenmoEnabled();
+	const paypalEnabled = isPayPalEnabled();
 	$: redirectUri = getAlbyRedirectUri($page.url);
+
+	function openPayPal() {
+		window.open(getPayPalUrl(), '_blank', 'noopener,noreferrer');
+	}
 
 	async function startAlbyLogin() {
 		const verifier = generateCodeVerifier();
@@ -85,7 +94,7 @@
 			>
 				Scan QR Code
 			</button>
-			{#if paymentIntent !== 'zap'}
+			{#if paymentIntent !== 'zap' && venmoEnabled}
 				<button
 					on:click={() => {
 						paymentType = 'venmo';
@@ -93,6 +102,9 @@
 				>
 					Venmo
 				</button>
+			{/if}
+			{#if paymentIntent !== 'zap' && paypalEnabled}
+				<button on:click={openPayPal}>PayPal</button>
 			{/if}
 		</div>
 	</boost-container>

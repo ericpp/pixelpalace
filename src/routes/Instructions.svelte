@@ -5,6 +5,12 @@
 	export let closeModal = () => {};
 	export let showInstructions = false;
 
+	import {
+		isAlbyEnabled,
+		isPayPalEnabled,
+		isVenmoEnabled,
+	} from '$/stores';
+
 	onMount(() => {
 		const handleKeyDown = (event: KeyboardEvent) => {
 			if (event.key === 'Escape') {
@@ -46,7 +52,17 @@
 				</li>
 				<li class="item">
 					Select the method you want to use to send your support.
-					You can use your Lightning wallet, Alby wallet, QR code, or Venmo?
+					You can use your Lightning wallet, Alby wallet, QR Code
+					{#if isPayPalEnabled()}
+					    {#if !isVenmoEnabled()}
+							, or PayPal.
+						{:else}
+							, PayPal
+						{/if}
+					{/if}
+					{#if isVenmoEnabled()}
+						, or Venmo.
+					{/if}
 				</li>
 				<li class="item">
 					Enter a name, amount, and a message you want to send to the artist and crew.

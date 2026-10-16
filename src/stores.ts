@@ -193,8 +193,20 @@ export function getAppName(): string {
 	return env.PUBLIC_APP_NAME?.trim() || 'Boost Beach';
 }
 
+export function isVenmoEnabled(): boolean {
+	return Boolean(optionalEnv('PUBLIC_VENMO_URL'));
+}
+
 export function getVenmoUrl(): string {
 	return requireEnv('PUBLIC_VENMO_URL');
+}
+
+export function isPayPalEnabled(): boolean {
+	return Boolean(optionalEnv('PUBLIC_PAYPAL_URL'));
+}
+
+export function getPayPalUrl(): string {
+	return requireEnv('PUBLIC_PAYPAL_URL');
 }
 
 const DEFAULT_NOSTR_RELAYS = [
