@@ -21,6 +21,9 @@ function unlockIntervalMs(): number {
 }
 
 function slotsFromRows(rows: EffectUnlockRow[], intervalMs: number): EffectSlotState[] {
+	if (intervalMs <= 0) {
+		return EFFECT_IDS.map((id) => ({ id, unlocked: true, remainingMs: 0 }));
+	}
 	const byId = new Map(rows.map((row) => [row.effect_id, row]));
 	return EFFECT_IDS.map((id) => {
 		const row = byId.get(id);
@@ -171,7 +174,7 @@ export async function publishEffectBoost(input: {
 			throw new EffectLockedError(current);
 		}
 
-		await lockAllEffects(query, input.viewerId);
+		if (intervalMs > 0) await lockAllEffects(query, input.viewerId);
 		return readEffectSlots(query, input.viewerId, intervalMs);
 	});
 
@@ -217,7 +220,7 @@ export async function consumeEffectUnlock(viewerId: string, effectId: string): P
 		if (!slot?.unlocked) {
 			throw new EffectLockedError(current);
 		}
-		await lockAllEffects(query, viewerId);
+		if (intervalMs > 0) await lockAllEffects(query, viewerId);
 		return readEffectSlots(query, viewerId, intervalMs);
 	});
 }

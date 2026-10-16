@@ -6,11 +6,11 @@ function trim(value: string | undefined): string | undefined {
 	return value?.trim() || undefined;
 }
 
-function intEnv(value: string | undefined, fallback: number): number {
+function intEnv(value: string | undefined, fallback: number, min = 1): number {
 	const raw = trim(value);
 	if (!raw) return fallback;
 	const parsed = Number(raw);
-	return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+	return Number.isFinite(parsed) && parsed >= min ? parsed : fallback;
 }
 
 export function isLiveEnabled(): boolean {
@@ -109,7 +109,7 @@ export function getNostrRelays(): string[] {
 
 export function getUnlockConfig() {
 	return {
-		unlockSeconds: intEnv(env.EFFECT_UNLOCK_SECONDS, 60),
+		unlockSeconds: intEnv(env.EFFECT_UNLOCK_SECONDS, 60, 0),
 		heartbeatMaxMs: 20_000,
 		heartbeatHugeMs: 45_000
 	};
