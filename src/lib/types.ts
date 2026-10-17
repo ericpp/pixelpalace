@@ -62,7 +62,12 @@ export interface FiredEffect {
 
 export interface WalletProvider {
 	getBalance?: () => Promise<{ balance: number }>;
-	getInfo?: () => Promise<{ alias?: string; node?: { alias?: string } }>;
+	getInfo?: () => Promise<{
+		alias?: string;
+		/** WebLN method names, or NIP-47 names mapped by the NWC provider. */
+		methods?: string[];
+		node?: { alias?: string };
+	}>;
 	keysend?: (params: {
 		destination: string;
 		amount: number;

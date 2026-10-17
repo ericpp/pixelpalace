@@ -1,7 +1,29 @@
+import { fetchLnurlInvoice, hasPublicLnurlTarget } from '$/stores';
 import type { Block, BoostPayment, PaymentResult, WalletProvider } from '$lib/types';
 import buildBoostPayments from './buildBoostPayments';
 
 const KEYSEND_PUBKEY = /^[0-9a-fA-F]{66}$/;
+
+/** NWC get_info lists pay_keysend; Bitcoin Connect maps that to payKeysend or keysend. */
+const KEYSEND_METHOD = /^(keysend|paykeysend|pay_keysend)$/i;
+
+/**
+ * The NWC WebLN provider always exposes keysend(), even when the wallet's
+ * get_info methods omit pay_keysend. Trust the advertised method list.
+ */
+async function walletSupportsKeysend(provider: WalletProvider): Promise<boolean> {
+	if (typeof provider.keysend !== 'function') return false;
+	if (!provider.getInfo) return true;
+
+	try {
+		const info = await provider.getInfo();
+		const methods = info?.methods;
+		if (!methods?.length) return true;
+		return methods.some((method) => KEYSEND_METHOD.test(method));
+	} catch {
+		return true;
+	}
+}
 
 async function resolveKeysendTarget(address: string): Promise<{
 	destination: string;
@@ -66,16 +88,30 @@ async function fetchLnAddressInvoice(address: string, amountMsats: number): Prom
 	return invoice.pr;
 }
 
-async function payDestination(provider: WalletProvider, payment: BoostPayment): Promise<unknown> {
+async function payLnAddressInvoice(
+	provider: WalletProvider,
+	destination: string,
+	amount: number
+): Promise<unknown> {
+	const invoice = await fetchLnAddressInvoice(destination, amount * 1000);
+	console.log('lnaddress invoice', {
+		invoice,
+		amount,
+		destination
+	});
+	return provider.sendPayment(invoice);
+}
+
+async function payDestination(
+	provider: WalletProvider,
+	payment: BoostPayment,
+	supportsKeysend: boolean
+): Promise<unknown> {
 	const { type, destination, amount, customRecords } = payment;
-	const shouldKeysend =
-		type === 'node' || KEYSEND_PUBKEY.test(destination) || destination.includes('@');
+	const isLnAddress = type === 'lnaddress' || destination.includes('@');
+	const isNode = type === 'node' || KEYSEND_PUBKEY.test(destination);
 
-	if (shouldKeysend) {
-		if (!provider.keysend) {
-			throw new Error('Connected wallet does not support keysend payments');
-		}
-
+	if (supportsKeysend && provider.keysend && (isNode || isLnAddress)) {
 		const { destination: keysendDestination, extraCustomRecords } =
 			await resolveKeysendTarget(destination);
 
@@ -88,14 +124,12 @@ async function payDestination(provider: WalletProvider, payment: BoostPayment): 
 		return provider.keysend(params);
 	}
 
-	if (type === 'lnaddress' || destination.includes('@')) {
-		const invoice = await fetchLnAddressInvoice(destination, amount * 1000);
-		console.log('lnaddress invoice', {
-			invoice,
-			amount,
-			destination
-		});
-		return provider.sendPayment(invoice);
+	if (isLnAddress) {
+		return payLnAddressInvoice(provider, destination, amount);
+	}
+
+	if (isNode) {
+		throw new Error('Connected wallet does not support keysend payments');
 	}
 
 	throw new Error(`Unsupported payment destination type: ${type || 'unknown'}`);
@@ -122,13 +156,29 @@ export default async function sendBoostWallet({
 		throw new Error('Wallet is not connected');
 	}
 
+	const supportsKeysend = await walletSupportsKeysend(provider);
+	if (!supportsKeysend && hasPublicLnurlTarget()) {
+		const invoice = await fetchLnurlInvoice(block.eventGuid, {
+			amount: satAmount * 1000,
+			comment: boostagram,
+			senderName,
+			blockGuid: block.blockGuid
+		});
+		if (!invoice.pr) {
+			throw new Error('LNURL invoice missing payment request');
+		}
+		console.log('public lnurl invoice', { amount: satAmount, invoice: invoice.pr });
+		await provider.sendPayment(invoice.pr);
+		return { payments: 1, successCount: 1, failureCount: 0 };
+	}
+
 	const payments = buildBoostPayments({ block, satAmount, boostagram, senderName, isDefault });
 	let successCount = 0;
 	let failureCount = 0;
 
 	for (const payment of payments) {
 		try {
-			await payDestination(provider, payment);
+			await payDestination(provider, payment, supportsKeysend);
 			successCount += 1;
 			onPaymentResult?.({
 				destIndex: payment.destIndex,

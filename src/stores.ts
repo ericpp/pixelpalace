@@ -131,6 +131,11 @@ export function getLightningAddress(): string | undefined {
 	return optionalEnv('PUBLIC_LIGHTNING_ADDRESS');
 }
 
+/** True when a single public invoice target is configured for non-keysend wallets. */
+export function hasPublicLnurlTarget(): boolean {
+	return Boolean(getLnurlCallbackTemplate() || getLightningAddress());
+}
+
 function lightningAddressWellKnownUrl(address: string): string {
 	const at = address.lastIndexOf('@');
 	const user = address.slice(0, at);
