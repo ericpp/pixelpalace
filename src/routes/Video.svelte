@@ -21,10 +21,16 @@
 
 	export let guid = getEventGuid();
 
+	const RETRY_MS = 60_000;
+
 	let player: HTMLVideoElement | undefined;
 	let block: Block | undefined;
 	let hls: Hls | undefined;
 	let sourceToken = 0;
+	let currentSrc = '';
+	let usingHls = false;
+	let retryOnMediaError = false;
+	let retryTimer: ReturnType<typeof setTimeout> | undefined;
 	let muted = true;
 	$: sourceVideo = $mainSettings?.liveEnclosure || (placeholderEnabled ? placeholderVideo : '');
 	// sourceVideo = 'https://listen.noagendastream.com/noagenda';
@@ -33,7 +39,27 @@
 
 	$: console.log($mainSettings);
 
+	function clearRetry() {
+		if (!retryTimer) return;
+		clearTimeout(retryTimer);
+		retryTimer = undefined;
+	}
+
+	function scheduleRetry(src: string, el: HTMLVideoElement, token: number) {
+		if (token !== sourceToken || retryTimer) return;
+		console.log('stream not ready, retrying in', RETRY_MS);
+		retryTimer = setTimeout(() => {
+			retryTimer = undefined;
+			if (token !== sourceToken) return;
+			void setSource(src, el);
+		}, RETRY_MS);
+		hls?.destroy();
+		hls = undefined;
+		usingHls = false;
+	}
+
 	async function setSource(src: string, el?: HTMLVideoElement) {
+		clearRetry();
 		console.log(el);
 		console.log(src);
 		if (!el) return;
@@ -41,17 +67,23 @@
 		const token = ++sourceToken;
 		hls?.destroy();
 		hls = undefined;
+		usingHls = false;
+		retryOnMediaError = false;
 
 		if (!src) {
+			currentSrc = '';
 			el.removeAttribute('src');
 			el.load();
 			return;
 		}
 
+		currentSrc = src;
+
 		el.muted = muted;
 
 		if (src.includes('.m3u8')) {
 			if (el.canPlayType('application/vnd.apple.mpegurl')) {
+				retryOnMediaError = true;
 				el.src = src;
 				startPlayback(el);
 				return;
@@ -63,7 +95,12 @@
 			console.log('hello hls.js!');
 			const instance = new HlsPlayer();
 			hls = instance;
+			usingHls = true;
 			instance.attachMedia(el);
+			instance.on(HlsPlayer.Events.ERROR, function (_event, data) {
+				if (token !== sourceToken || !data.fatal) return;
+				scheduleRetry(src, el, token);
+			});
 			instance.on(HlsPlayer.Events.MEDIA_ATTACHED, function () {
 				if (token !== sourceToken) return;
 				console.log('video and hls.js are now bound together !');
@@ -76,8 +113,19 @@
 			return;
 		}
 
+		retryOnMediaError = true;
 		el.src = src;
 		startPlayback(el);
+	}
+
+	function onVideoError() {
+		if (!retryOnMediaError || usingHls || !sourceVideo || !currentSrc || !player) return;
+		scheduleRetry(currentSrc, player, sourceToken);
+	}
+
+	function onPlaying() {
+		clearRetry();
+		syncLivePlaying();
 	}
 
 	function startPlayback(el: HTMLVideoElement) {
@@ -155,6 +203,7 @@
 
 		return () => {
 			sourceToken += 1;
+			clearRetry();
 			hls?.destroy();
 			hls = undefined;
 			if (liveEnabled) {
@@ -192,9 +241,10 @@
 				controls
 				loop
 				preload="auto"
-				on:playing={syncLivePlaying}
+				on:playing={onPlaying}
 				on:pause={syncLivePlaying}
 				on:ended={replayFromStart}
+				on:error={onVideoError}
 				on:volumechange={syncMuted}
 				bind:this={player}
 			></video>
