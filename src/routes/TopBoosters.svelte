@@ -105,7 +105,10 @@
 		display: flex;
 		align-items: center;
 		color: #fff8ea;
+		background-color: #b07a42;
 		background-image: url('/plank.png');
+		background-repeat: no-repeat;
+		background-size: 100% 100%;
 		clip-path: var(--shape);
 		font-family: var(--font-pixel);
 		font-weight: 600;
