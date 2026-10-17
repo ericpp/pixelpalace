@@ -1,9 +1,8 @@
 <script lang="ts">
 	import { onDestroy, onMount } from 'svelte';
-	import { get } from 'svelte/store';
 	import Modal from '../Modal.svelte';
 	import { EFFECT_ICONS, EFFECT_LABELS, type EffectId } from '$lib/effects';
-	import { effectSlots, effectSlotsUpdatedAt, livePlaying } from '$/stores';
+	import { effectSlots, effectSlotsUpdatedAt } from '$/stores';
 	import { requestEffectSync } from '$lib/liveSocket';
 	import type { EffectSlotState } from '$lib/types';
 
@@ -77,22 +76,22 @@
 
 	function packCooldownLabel(current: Record<string, SlotView>): string | null {
 		const slots = Object.values(current);
-		if (slots.length === 0) return 'Watch';
+		if (slots.length === 0) return 'Wait';
 		const locked = slots.filter((slot) => !slot.unlocked);
 		if (locked.length === 0) return null;
 		const known = locked
 			.map((slot) => slot.seconds)
 			.filter((seconds): seconds is number => seconds != null);
-		if (known.length === 0) return 'Watch';
+		if (known.length === 0) return 'Wait';
 		return `${Math.min(...known)}s`;
 	}
 
 	function packAriaLabel(isOpen: boolean, label: string | null): string {
 		if (isOpen) return 'Close backpack';
 		if (label == null) return 'Open backpack';
-		if (label === 'Watch') return 'Open backpack, watch to recharge items';
+		if (label === 'Wait') return 'Open backpack, pack recharging';
 		const seconds = label.endsWith('s') ? label.slice(0, -1) : label;
-		return `Open backpack, ${seconds} seconds until items recharge`;
+		return `Open backpack, pack recharging, ${seconds} seconds`;
 	}
 
 	$: cooldown = packCooldownLabel(views);
@@ -118,7 +117,7 @@
 	onMount(() => {
 		timer = setInterval(() => {
 			const time = Date.now();
-			const step = get(livePlaying) ? time - last : 0;
+			const step = time - last;
 			last = time;
 			if (step > 0) {
 				const next: Record<string, number | null> = {};
@@ -183,8 +182,8 @@
 			aria-label={unlocked
 				? `Send ${effect.label}`
 				: left == null
-					? `${effect.label} locked until you watch`
-					: `${effect.label} locked, ${left} seconds of video left`}
+					? `${effect.label} recharging`
+					: `${effect.label} recharging, ${left} seconds`}
 			on:click={() => useEffect(effect)}
 		>
 			<img
@@ -196,7 +195,7 @@
 			/>
 			<span class="slot-label">{effect.label}</span>
 			{#if !unlocked}
-				<span class="cooldown">{left == null ? 'Watch' : `${left}s`}</span>
+				<span class="cooldown">{left == null ? 'Wait' : `${left}s`}</span>
 			{/if}
 		</button>
 	{/each}

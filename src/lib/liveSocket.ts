@@ -31,7 +31,7 @@ export function setLivePlaying(value: boolean): void {
 }
 
 export function requestEffectSync(): void {
-	if (!isLiveEnabled() || !playing) return;
+	if (!isLiveEnabled()) return;
 	if (isSocketOpen() && socket) {
 		const message: LiveClientMessage = { type: 'sync' };
 		socket.send(JSON.stringify(message));

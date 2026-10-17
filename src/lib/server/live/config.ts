@@ -109,8 +109,6 @@ export function getNostrRelays(): string[] {
 
 export function getUnlockConfig() {
 	return {
-		unlockSeconds: intEnv(env.EFFECT_UNLOCK_SECONDS, 60, 0),
-		heartbeatMaxMs: 20_000,
-		heartbeatHugeMs: 45_000
+		unlockSeconds: intEnv(env.EFFECT_UNLOCK_SECONDS, 60, 0)
 	};
 }

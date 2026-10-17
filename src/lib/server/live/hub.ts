@@ -1,5 +1,5 @@
 import type { LiveServerMessage } from '$lib/liveProtocol';
-import type { FiredEffect } from '$lib/types';
+import type { EffectSlotState, FiredEffect } from '$lib/types';
 
 export type LiveSocketClient = {
 	send: (message: LiveServerMessage) => void;
@@ -29,6 +29,10 @@ export function removeLiveClient(client: LiveSocketClient): void {
 
 export function broadcastFiredEffect(effect: FiredEffect): void {
 	broadcast({ type: 'effect', effect });
+}
+
+export function broadcastEffectSlots(effects: EffectSlotState[]): void {
+	broadcast({ type: 'effects', effects });
 }
 
 function broadcast(message: LiveServerMessage): void {

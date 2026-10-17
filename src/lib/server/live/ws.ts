@@ -116,8 +116,12 @@ async function handleConnection(ws: WebSocket, req: http.IncomingMessage): Promi
 				return;
 			}
 			if (message.type === 'sync') {
-				const effects = await creditWatchTime();
-				if (effects) client.send({ type: 'effects', effects });
+				if (playing) await creditWatchTime();
+				try {
+					client.send({ type: 'effects', effects: await getEffectSlots(viewerId) });
+				} catch {
+					// Slot lookup is best-effort.
+				}
 				return;
 			}
 			if (message.type !== 'playing' || typeof message.playing !== 'boolean') return;

@@ -35,6 +35,7 @@ async function dropLegacyTables(db: Sql): Promise<void> {
 async function createSchema(db: Sql): Promise<void> {
 	await dropLegacyTables(db);
 	await db`DROP TABLE IF EXISTS boosts CASCADE`;
+	await db`DROP TABLE IF EXISTS effect_unlocks CASCADE`;
 	await db`
 		CREATE TABLE IF NOT EXISTS viewers (
 			id TEXT PRIMARY KEY,
@@ -42,13 +43,15 @@ async function createSchema(db: Sql): Promise<void> {
 		)
 	`;
 	await db`
-		CREATE TABLE IF NOT EXISTS effect_unlocks (
-			viewer_id TEXT NOT NULL REFERENCES viewers(id),
-			effect_id TEXT NOT NULL,
-			pending_ms INTEGER NOT NULL DEFAULT 0,
-			unlocked BOOLEAN NOT NULL DEFAULT FALSE,
-			PRIMARY KEY (viewer_id, effect_id)
+		CREATE TABLE IF NOT EXISTS effect_cooldown (
+			id INT PRIMARY KEY CHECK (id = 1),
+			last_fired_at TIMESTAMPTZ
 		)
+	`;
+	await db`
+		INSERT INTO effect_cooldown (id, last_fired_at)
+		VALUES (1, NULL)
+		ON CONFLICT (id) DO NOTHING
 	`;
 }
 
@@ -69,8 +72,7 @@ export type ViewerRow = {
 	last_heartbeat_at: Date | null;
 };
 
-export type EffectUnlockRow = {
-	effect_id: string;
-	pending_ms: number;
-	unlocked: boolean;
+export type EffectCooldownRow = {
+	last_fired_at: Date | null;
+	db_now: Date;
 };
