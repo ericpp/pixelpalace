@@ -210,7 +210,7 @@
 	.chat-frame :global(.chat) {
 		height: 100%;
 		min-height: 0;
-		background: #f6f3ee;
+		background-color: var(--wood-dark);
 		border: 3px solid var(--wood-outline);
 		border-radius: 3px;
 		box-sizing: border-box;

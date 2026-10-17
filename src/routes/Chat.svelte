@@ -13,13 +13,15 @@
 		min-height: 0;
 		display: flex;
 		flex-direction: column;
-		align-items: center;
 		position: relative;
+		background-color: var(--wood-dark);
 	}
 
 	iframe {
-		width: calc(100% - 6px);
+		width: 100%;
+		height: 100%;
 		border: none;
 		flex-grow: 1;
+		background-color: var(--wood-dark);
 	}
 </style>
