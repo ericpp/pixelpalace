@@ -253,7 +253,9 @@ const DEFAULT_BOARD_RELAYS = [
 
 export interface BoardSettings {
 	nostrPubkey?: string;
-	zapEvent?: string;
+	nostrZapEvent?: string;
+	lnzapPubkeys: string[];
+	lnzapEvent?: string;
 	after?: string;
 	before?: string;
 	podcasts: string[];
@@ -273,7 +275,9 @@ export function getBoardSettings(
 ): BoardSettings {
 	return {
 		nostrPubkey: optionalEnv('PUBLIC_BOARD_NOSTR_PUBKEY'),
-		zapEvent: optionalEnv('PUBLIC_BOARD_ZAP_EVENT'),
+		nostrZapEvent: optionalEnv('PUBLIC_BOARD_ZAP_EVENT'),
+		lnzapPubkeys: csvEnv('PUBLIC_BOARD_LNZAP_PUBKEYS'),
+		lnzapEvent: optionalEnv('PUBLIC_BOARD_LNZAP_EVENT'),
 		after: optionalEnv('PUBLIC_BOARD_AFTER'),
 		before: optionalEnv('PUBLIC_BOARD_BEFORE'),
 		podcasts: scope.podcasts,
@@ -286,7 +290,9 @@ export function getBoardSettings(
 export function isBoardConfigured(settings: BoardSettings): boolean {
 	return Boolean(
 		settings.nostrPubkey ||
-			settings.zapEvent ||
+			settings.nostrZapEvent ||
+			settings.lnzapPubkeys.length ||
+			settings.lnzapEvent ||
 			settings.podcasts.length ||
 			settings.eventGuids.length ||
 			settings.episodeGuids.length

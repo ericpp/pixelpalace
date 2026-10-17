@@ -20,7 +20,9 @@ export interface BoardScore {
 export interface BoostBoardOptions {
 	relays: string[];
 	nostrPubkey?: string;
-	zapEvent?: string;
+	nostrZapEvent?: string;
+	lnzapPubkeys?: string[];
+	lnzapEvent?: string;
 	after?: string | number;
 	before?: string | number;
 	podcasts?: string[];
@@ -93,7 +95,12 @@ export function startBoostBoard(options: BoostBoardOptions): () => void {
 			options.eventGuids?.length ||
 			options.episodeGuids?.length
 	);
-	if (!hasBoostSource && !options.zapEvent) {
+	if (
+		!hasBoostSource &&
+		!options.nostrZapEvent &&
+		!options.lnzapPubkeys?.length &&
+		!options.lnzapEvent
+	) {
 		return () => {};
 	}
 
@@ -149,7 +156,9 @@ class Scores {
 class BoostBoard {
 	private relays: string[];
 	private nostrPubkey?: string;
-	private zapEvent?: string;
+	private nostrZapEvent?: string;
+	private lnzapPubkeys: string[];
+	private lnzapEvent?: string;
 	private loadBoosts: boolean;
 	private filters: BoardFilters = {};
 	private lastBoostAt: number | null = null;
@@ -163,7 +172,9 @@ class BoostBoard {
 	constructor(options: BoostBoardOptions) {
 		this.relays = options.relays;
 		this.nostrPubkey = options.nostrPubkey;
-		this.zapEvent = options.zapEvent;
+		this.nostrZapEvent = options.nostrZapEvent;
+		this.lnzapPubkeys = options.lnzapPubkeys?.filter(Boolean) ?? [];
+		this.lnzapEvent = options.lnzapEvent;
 		this.loadBoosts = Boolean(
 			options.nostrPubkey ||
 				options.podcasts?.length ||
@@ -203,11 +214,22 @@ class BoostBoard {
 					this.add(payment);
 				});
 			}
-			if (this.zapEvent) {
-				this.watcher.subscribeZaps(this.zapEvent, (payment) => {
+			if (this.nostrZapEvent) {
+				this.watcher.subscribeNostrZaps(this.nostrZapEvent, (payment) => {
 					if (this.destroyed) return;
 					this.add(payment);
 				});
+			}
+			if (this.lnzapPubkeys.length || this.lnzapEvent) {
+				this.watcher.subscribeLnzaps(
+					this.lnzapPubkeys,
+					this.lnzapEvent ? [this.lnzapEvent] : [],
+					{ since: this.filters.after, until: this.filters.before },
+					(payment) => {
+						if (this.destroyed) return;
+						this.add(payment);
+					}
+				);
 			}
 		} catch (error) {
 			if (!this.destroyed) console.error('Error starting boost board:', error);
@@ -263,7 +285,8 @@ class BoostBoard {
 		}
 
 		if (payment.isOld && payment.type === 'boost' && !this.loadBoosts) return;
-		if (payment.isOld && payment.type === 'zap' && !this.zapEvent) return;
+		if (payment.isOld && payment.type === 'zap' && !this.nostrZapEvent) return;
+		if (payment.isOld && payment.type === 'lnzap' && !this.lnzapPubkeys.length && !this.lnzapEvent) return;
 
 		if (!payment.sats || Number.isNaN(payment.sats)) return;
 		if (this.identifiers.has(payment.identifier)) return;
@@ -289,7 +312,7 @@ class BoostBoard {
 		);
 
 		if (
-			payment.type === 'boost' &&
+			(payment.type === 'boost' || payment.type === 'lnzap') &&
 			(this.filters.podcasts || this.filters.eventGuids || this.filters.episodeGuids) &&
 			!podcastMatch &&
 			!eventGuidMatch &&
@@ -430,8 +453,47 @@ class NostrWatcher {
 		this.subscriptions.push({ cleanup: () => oldState.cleanup(), closer });
 	}
 
-	subscribeZaps(nostrActivity: string, callback: (payment: BoardPayment) => void): void {
-		this.subscribeMultiZaps([nostrActivity], callback);
+	subscribeNostrZaps(nostrActivity: string, callback: (payment: BoardPayment) => void): void {
+		this.subscribeMultiNostrZaps([nostrActivity], callback);
+	}
+
+	subscribeLnzaps(
+		pubkeys: string[],
+		activities: string[],
+		window: { since?: number; until?: number },
+		callback: (payment: BoardPayment) => void
+	): void {
+		if (this.destroyed) return;
+
+		const subscriptionId = `lnzaps-${this.subscriptionCount++}`;
+		const filter: Filter = { kinds: [9735] };
+		if (pubkeys.length) filter['#p'] = pubkeys.map((pubkey) => parsePubkey(pubkey));
+		if (activities.length) filter['#a'] = activities.map((activity) => parseActivity(activity));
+		if (!filter['#p'] && !filter['#a']) {
+			console.warn('No pubkeys or activities provided');
+			return;
+		}
+		if (window.since != null) filter.since = window.since;
+		if (window.until != null) filter.until = window.until;
+
+		const oldState = createOldState();
+		let closed = false;
+
+		const closer = this.pool.subscribeMany(this.relays, filter, {
+			onevent: (event) => {
+				void this.onLnzapEvent(event, oldState, callback);
+			},
+			onclose: () => {
+				if (closed) return;
+				closed = true;
+				oldState.cleanup();
+				this.scheduleReconnect(subscriptionId, 'lnzaps', () => {
+					this.subscribeLnzaps(pubkeys, activities, window, callback);
+				});
+			}
+		});
+
+		this.subscriptions.push({ cleanup: () => oldState.cleanup(), closer });
 	}
 
 	destroy(): void {
@@ -458,13 +520,13 @@ class NostrWatcher {
 		this.pool.destroy();
 	}
 
-	private subscribeMultiZaps(
+	private subscribeMultiNostrZaps(
 		nostrActivities: string[],
 		callback: (payment: BoardPayment) => void
 	): void {
 		if (this.destroyed) return;
 
-		const subscriptionId = `zaps-${this.subscriptionCount++}`;
+		const subscriptionId = `nostr-zaps-${this.subscriptionCount++}`;
 		const parsedActivities = nostrActivities.map((activity) => parseActivity(activity));
 		const oldState = createOldState();
 		let closed = false;
@@ -474,14 +536,14 @@ class NostrWatcher {
 			{ '#a': parsedActivities, kinds: [9735] } satisfies Filter,
 			{
 				onevent: (event) => {
-					void this.onZapEvent(event, oldState, callback);
+					void this.onNostrZapEvent(event, oldState, callback);
 				},
 				onclose: () => {
 					if (closed) return;
 					closed = true;
 					oldState.cleanup();
-					this.scheduleReconnect(subscriptionId, 'zaps', () => {
-						this.subscribeMultiZaps(nostrActivities, callback);
+					this.scheduleReconnect(subscriptionId, 'nostr zaps', () => {
+						this.subscribeMultiNostrZaps(nostrActivities, callback);
 					});
 				}
 			}
@@ -524,7 +586,7 @@ class NostrWatcher {
 		}
 	}
 
-	private async onZapEvent(
+	private async onNostrZapEvent(
 		event: Event,
 		oldState: OldState,
 		callback: (payment: BoardPayment) => void
@@ -533,20 +595,10 @@ class NostrWatcher {
 
 		try {
 			oldState.markSeen();
-			const tags = tagsByName(event.tags);
-			if (!tags.description?.[0] || !tags.bolt11?.[0]) {
-				console.warn('Missing required tags in zap event');
-				return;
-			}
+			const receipt = parseZapReceipt(event);
+			if (!receipt) return;
 
-			const zapRequest = JSON.parse(tags.description[0]) as { pubkey?: string };
-			const valueMsat = getMsatsFromBolt11(tags.bolt11[0]);
-			if (!valueMsat) {
-				console.warn('Could not parse sats from bolt11');
-				return;
-			}
-
-			const profile = zapRequest.pubkey ? await this.getNostrProfile(zapRequest.pubkey) : {};
+			const senderName = await this.zapSenderName(receipt.requestTags, receipt.zapRequest.pubkey);
 			if (this.destroyed) return;
 
 			callback({
@@ -554,19 +606,94 @@ class NostrWatcher {
 				action: 'zap',
 				identifier: event.id,
 				creation_date: event.created_at,
-				sender_name: profile.display_name || profile.name || 'Anonymous',
+				sender_name: senderName,
 				app_name: 'Nostr',
-				podcast: 'Nostr',
-				event_guid: null,
-				episode_guid: null,
+				podcast: receipt.requestTags.title?.[0] || 'Nostr',
+				event_guid: receipt.requestTags.eventGuid?.[0] || null,
+				episode_guid: tagWithPrefix(receipt.requestTags, 'i', EPISODE_GUID_PREFIX),
 				episode: null,
-				sats: Math.floor(valueMsat / 1000),
-				message: event.content,
+				sats: Math.floor(receipt.valueMsat / 1000),
+				message: receipt.zapRequest.content || event.content,
 				isOld: oldState.isOld()
 			});
 		} catch (error) {
-			console.error('Error processing zap event:', error);
+			console.error('Error processing nostr zap event:', error);
 		}
+	}
+
+	private async onLnzapEvent(
+		event: Event,
+		oldState: OldState,
+		callback: (payment: BoardPayment) => void
+	): Promise<void> {
+		if (this.destroyed) return;
+
+		try {
+			oldState.markSeen();
+			const receipt = parseZapReceipt(event);
+			if (!receipt) return;
+
+			const senderName = await this.lnzapSenderName(receipt.requestTags);
+			if (this.destroyed) return;
+
+			callback({
+				type: 'lnzap',
+				action: 'lnzap',
+				identifier: event.id,
+				creation_date: event.created_at,
+				sender_name: senderName,
+				app_name: 'Lightning Payment',
+				podcast:
+					tagWithPrefix(receipt.requestTags, 'i', PODCAST_GUID_PREFIX) ||
+					receipt.requestTags.title?.[0] ||
+					'',
+				event_guid: receipt.requestTags.eventGuid?.[0] || null,
+				episode_guid: tagWithPrefix(receipt.requestTags, 'i', EPISODE_GUID_PREFIX),
+				episode: receipt.requestTags.title?.[0] || null,
+				sats: Math.floor(receipt.valueMsat / 1000),
+				message: receipt.zapRequest.content,
+				isOld: oldState.isOld()
+			});
+		} catch (error) {
+			console.error('Error processing lnzap event:', error);
+		}
+	}
+
+	private async lnzapSenderName(requestTags: Record<string, string[]>): Promise<string> {
+		const payerName = requestTags.payerName?.[0]?.trim();
+		if (payerName) return payerName;
+
+		const senderPubkey = requestTags.senderPubkey?.[0];
+		if (senderPubkey) {
+			const profile = await this.getNostrProfile(senderPubkey);
+			const name = profile.display_name || profile.name;
+			if (name) return name;
+		}
+
+		return 'Anonymous';
+	}
+
+	private async zapSenderName(
+		requestTags: Record<string, string[]>,
+		requestPubkey?: string
+	): Promise<string> {
+		const payerName = requestTags.payerName?.[0]?.trim();
+		if (payerName) return payerName;
+
+		const senderPubkey = requestTags.senderPubkey?.[0];
+		if (senderPubkey) {
+			const profile = await this.getNostrProfile(senderPubkey);
+			const name = profile.display_name || profile.name;
+			if (name) return name;
+		}
+
+		if (requestPubkey) {
+			const profile = await this.getNostrProfile(requestPubkey);
+			const name = profile.display_name || profile.name;
+			if (name) return name;
+		}
+
+		return 'Anonymous';
 	}
 
 	private getNostrProfile(pubkey: string): Promise<NostrProfile> {
@@ -700,6 +827,41 @@ function parseActivity(addr: string): string {
 		console.error('Error parsing activity:', error);
 		return addr;
 	}
+}
+
+const PODCAST_GUID_PREFIX = 'podcast:guid:';
+const EPISODE_GUID_PREFIX = 'podcast:item:guid:';
+
+function tagWithPrefix(tags: Record<string, string[]>, name: string, prefix: string): string | null {
+	const value = tags[name]?.find((item) => item.startsWith(prefix));
+	return value ? value.slice(prefix.length) : null;
+}
+
+interface ZapReceipt {
+	zapRequest: { pubkey?: string; content?: string; tags?: string[][] };
+	requestTags: Record<string, string[]>;
+	valueMsat: number;
+}
+
+function parseZapReceipt(event: Event): ZapReceipt | null {
+	const tags = tagsByName(event.tags);
+	if (!tags.description?.[0] || !tags.bolt11?.[0]) {
+		console.warn('Missing required tags in zap event');
+		return null;
+	}
+
+	const zapRequest = JSON.parse(tags.description[0]) as ZapReceipt['zapRequest'];
+	const valueMsat = getMsatsFromBolt11(tags.bolt11[0]);
+	if (!valueMsat) {
+		console.warn('Could not parse sats from bolt11');
+		return null;
+	}
+
+	return {
+		zapRequest,
+		requestTags: tagsByName(zapRequest.tags || []),
+		valueMsat
+	};
 }
 
 function tagsByName(tags: string[][]): Record<string, string[]> {
