@@ -1,6 +1,19 @@
-import { fetchLnurlInvoice, hasPublicLnurlTarget } from '$/stores';
+import { fetchLnurlInvoice, hasPublicLnurlTarget, isBoostboxEnabled, postBoostbox } from '$/stores';
 import type { Block, BoostPayment, PaymentResult, WalletProvider } from '$lib/types';
+import { boostboxMetadata } from './boostboxMetadata';
 import buildBoostPayments from './buildBoostPayments';
+
+/** `rss::payment::<action> <url>` — kept whole when a comment must be shortened. */
+const BOOST_LINK = /^(rss::payment::\S+\s+\S+)/;
+
+function fitLnurlComment(desc: string, commentAllowed: number): string | undefined {
+	if (commentAllowed <= 0) return undefined;
+	if (desc.length <= commentAllowed) return desc;
+
+	const prefix = desc.match(BOOST_LINK)?.[1];
+	if (!prefix || prefix.length > commentAllowed) return undefined;
+	return (prefix + desc.slice(prefix.length, commentAllowed)).trimEnd();
+}
 
 const KEYSEND_PUBKEY = /^[0-9a-fA-F]{66}$/;
 
@@ -63,7 +76,11 @@ async function resolveKeysendTarget(address: string): Promise<{
 	return { destination: info.pubkey, extraCustomRecords };
 }
 
-async function fetchLnAddressInvoice(address: string, amountMsats: number): Promise<string> {
+async function fetchLnAddressInvoice(
+	address: string,
+	amountMsats: number,
+	comment?: string
+): Promise<string> {
 	const at = address.lastIndexOf('@');
 	const user = address.slice(0, at);
 	const domain = address.slice(at + 1);
@@ -71,12 +88,24 @@ async function fetchLnAddressInvoice(address: string, amountMsats: number): Prom
 	if (!metaRes.ok) {
 		throw new Error(`LNURL metadata fetch failed: ${metaRes.status}`);
 	}
-	const meta = (await metaRes.json()) as { callback?: string };
+	const meta = (await metaRes.json()) as { callback?: string; commentAllowed?: number };
 	if (!meta.callback) {
 		throw new Error('LNURL metadata missing callback');
 	}
 	const callback = new URL(meta.callback);
 	callback.searchParams.set('amount', String(amountMsats));
+	if (comment) {
+		const allowed = Number(meta.commentAllowed) || 0;
+		const fitted = fitLnurlComment(comment, allowed);
+		if (fitted) {
+			callback.searchParams.set('comment', fitted);
+		} else {
+			console.warn('LNURL comment not sent; commentAllowed too small', {
+				address,
+				commentAllowed: allowed
+			});
+		}
+	}
 	const invoiceRes = await fetch(callback.toString());
 	if (!invoiceRes.ok) {
 		throw new Error(`LNURL invoice fetch failed: ${invoiceRes.status}`);
@@ -91,22 +120,52 @@ async function fetchLnAddressInvoice(address: string, amountMsats: number): Prom
 async function payLnAddressInvoice(
 	provider: WalletProvider,
 	destination: string,
-	amount: number
+	amount: number,
+	comment?: string
 ): Promise<unknown> {
-	const invoice = await fetchLnAddressInvoice(destination, amount * 1000);
+	const invoice = await fetchLnAddressInvoice(destination, amount * 1000, comment);
 	console.log('lnaddress invoice', {
 		invoice,
 		amount,
-		destination
+		destination,
+		comment
 	});
 	return provider.sendPayment(invoice);
+}
+
+async function payBoostboxSplit(
+	provider: WalletProvider,
+	payment: BoostPayment,
+	group?: string
+): Promise<unknown> {
+	const { type, destination, amount } = payment;
+	const isLnAddress = type === 'lnaddress' || destination.includes('@');
+	if (!isLnAddress) {
+		throw new Error('Connected wallet does not support keysend payments');
+	}
+
+	let comment: string | undefined;
+	try {
+		const stored = await postBoostbox(boostboxMetadata(payment, group));
+		comment = stored.desc;
+	} catch (err) {
+		console.warn('BoostBox store failed, paying without metadata', destination, err);
+	}
+
+	return payLnAddressInvoice(provider, destination, amount, comment);
 }
 
 async function payDestination(
 	provider: WalletProvider,
 	payment: BoostPayment,
-	supportsKeysend: boolean
+	supportsKeysend: boolean,
+	useBoostbox: boolean,
+	boostGroup?: string
 ): Promise<unknown> {
+	if (useBoostbox) {
+		return payBoostboxSplit(provider, payment, boostGroup);
+	}
+
 	const { type, destination, amount, customRecords } = payment;
 	const isLnAddress = type === 'lnaddress' || destination.includes('@');
 	const isNode = type === 'node' || KEYSEND_PUBKEY.test(destination);
@@ -157,7 +216,8 @@ export default async function sendBoostWallet({
 	}
 
 	const supportsKeysend = await walletSupportsKeysend(provider);
-	if (!supportsKeysend && hasPublicLnurlTarget()) {
+	const useBoostbox = !supportsKeysend && (await isBoostboxEnabled());
+	if (!supportsKeysend && !useBoostbox && hasPublicLnurlTarget()) {
 		const invoice = await fetchLnurlInvoice(block.eventGuid, {
 			amount: satAmount * 1000,
 			comment: boostagram,
@@ -173,12 +233,13 @@ export default async function sendBoostWallet({
 	}
 
 	const payments = buildBoostPayments({ block, satAmount, boostagram, senderName, isDefault });
+	const boostGroup = useBoostbox ? crypto.randomUUID() : undefined;
 	let successCount = 0;
 	let failureCount = 0;
 
 	for (const payment of payments) {
 		try {
-			await payDestination(provider, payment, supportsKeysend);
+			await payDestination(provider, payment, supportsKeysend, useBoostbox, boostGroup);
 			successCount += 1;
 			onPaymentResult?.({
 				destIndex: payment.destIndex,

@@ -1,5 +1,6 @@
 import { writable } from 'svelte/store';
 import { env } from '$env/dynamic/public';
+import type { BoostboxMetadata, BoostboxStored } from '$lib/functions/boostboxMetadata';
 import type {
 	Block,
 	EffectSlotState,
@@ -197,6 +198,42 @@ export async function fetchLnurlInvoice(
 		throw new Error(`LNURL invoice fetch failed: ${res.status}`);
 	}
 	return res.json() as Promise<LnurlInvoiceResponse>;
+}
+
+let boostboxEnabled: Promise<boolean> | undefined;
+
+/** True when the server has a BoostBox API key. The result is cached after a successful check. */
+export function isBoostboxEnabled(): Promise<boolean> {
+	if (!boostboxEnabled) {
+		boostboxEnabled = fetch('/api/boostbox')
+			.then(async (res) => {
+				if (!res.ok) {
+					throw new Error(`BoostBox status failed: ${res.status}`);
+				}
+				const data = (await res.json()) as { enabled?: boolean };
+				return Boolean(data.enabled);
+			})
+			.catch((err) => {
+				boostboxEnabled = undefined;
+				console.warn('BoostBox status check failed', err);
+				return false;
+			});
+	}
+	return boostboxEnabled;
+}
+
+/** Store one split's boost metadata. Returns the permalink and BOLT11 description. */
+export async function postBoostbox(body: BoostboxMetadata): Promise<BoostboxStored> {
+	const res = await fetch('/api/boostbox', {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(body)
+	});
+	if (!res.ok) {
+		const text = await res.text();
+		throw new Error(text.slice(0, 200) || `BoostBox request failed: ${res.status}`);
+	}
+	return res.json() as Promise<BoostboxStored>;
 }
 
 export function getBtcPriceUrl(): string {
