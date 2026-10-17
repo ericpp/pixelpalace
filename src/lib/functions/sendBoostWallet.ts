@@ -17,6 +17,18 @@ function fitLnurlComment(desc: string, commentAllowed: number): string | undefin
 
 const KEYSEND_PUBKEY = /^[0-9a-fA-F]{66}$/;
 
+/** Node pubkeys an LNURL-only wallet pays through a lightning address instead. */
+const LNURL_ADDRESS_SUBSTITUTES: Record<string, string> = {
+	'02c7bb6f29f09d92d40d62d64443b688891259dea324406b4678df6235794f24bf':
+		'ericpp@getalby.com'
+};
+
+function substituteLnurlDestination(payment: BoostPayment): BoostPayment {
+	const substitute = LNURL_ADDRESS_SUBSTITUTES[payment.destination.toLowerCase()];
+	if (!substitute) return payment;
+	return { ...payment, type: 'lnaddress', destination: substitute };
+}
+
 /** NWC get_info lists pay_keysend; Bitcoin Connect maps that to payKeysend or keysend. */
 const KEYSEND_METHOD = /^(keysend|paykeysend|pay_keysend)$/i;
 
@@ -237,7 +249,8 @@ export default async function sendBoostWallet({
 	let successCount = 0;
 	let failureCount = 0;
 
-	for (const payment of payments) {
+	for (const built of payments) {
+		const payment = supportsKeysend ? built : substituteLnurlDestination(built);
 		try {
 			await payDestination(provider, payment, supportsKeysend, useBoostbox, boostGroup);
 			successCount += 1;
