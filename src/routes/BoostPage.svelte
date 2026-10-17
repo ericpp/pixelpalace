@@ -238,30 +238,26 @@
 
 		if (paymentType === 'qr') {
 			localStorage.setItem('senderName', senderName);
-			console.log(broadcastingBlock);
-			let fountainName = senderName ? `${senderName} - ` : '';
-			let fountainGram = `${fountainName}${boostagram}`;
-			console.log(
-				`https://api.fountain.fm/v1/lnurlp/sobig/pay?amount=${
-					amount * 1000
-				}&comment=${fountainGram}}`
-			);
-			let data = await fetchLnurlInvoice(
-				broadcastingBlock.eventGuid ? broadcastingBlock.eventGuid : getEventGuid(),
-				{
-					amount: amount * 1000,
-					comment: boostagram,
-					senderName,
-					blockGuid: broadcastingBlock.blockGuid
-				}
-			);
-			invoice = data.pr;
-			showQR = true;
-			console.log(data);
+			try {
+				let data = await fetchLnurlInvoice(
+					broadcastingBlock.eventGuid ? broadcastingBlock.eventGuid : getEventGuid(),
+					{
+						amount: amount * 1000,
+						comment: boostagram,
+						senderName,
+						blockGuid: broadcastingBlock.blockGuid
+					}
+				);
+				invoice = data.pr;
+				showQR = true;
+			} catch (err) {
+				console.log(err);
+				payError = err instanceof Error ? err.message : 'Boost failed';
+			}
 		} else if (paymentType === 'wallet') {
 			const provider = getConnectedProvider() || $wallet.provider;
 			if (!provider) {
-				console.log('Wallet is not connected');
+				payError = 'Wallet is not connected';
 				return;
 			}
 
@@ -292,9 +288,17 @@
 					if ($wallet.balance != null) {
 						$wallet.balance -= amount;
 					}
+				} else if (result.failureCount > 0) {
+					payError =
+						result.failureCount === 1
+							? '1 split has failed'
+							: `${result.failureCount} splits have failed`;
+				} else {
+					payError = 'Boost failed';
 				}
 			} catch (err) {
 				console.log(err);
+				payError = err instanceof Error ? err.message : 'Boost failed';
 			} finally {
 				paying = false;
 			}
@@ -333,7 +337,10 @@
 						$user.balance -= amount;
 					}
 				} else if (failureCount > 0) {
-					payError = 'One or more splits failed';
+					payError =
+						failureCount === 1 ? '1 split has failed' : `${failureCount} splits have failed`;
+				} else {
+					payError = 'Boost failed';
 				}
 			} catch (err) {
 				console.log(err);
@@ -491,9 +498,13 @@
 				<button class="extras-toggle" type="button" aria-expanded={showExtras} on:click={toggleExtras}>
 					{showExtras ? 'Hide sats' : 'Add sats'}
 				</button>
-				<button class="boost" disabled={paying} on:click={handleBoost}>
-					{paying ? 'Sending…' : showExtras ? 'Boost' : 'Use item'}
-				</button>
+				{#if payError}
+					<button class="boost" type="button" on:click={() => (showModal = false)}>Close</button>
+				{:else}
+					<button class="boost" disabled={paying} on:click={handleBoost}>
+						{paying ? 'Sending…' : showExtras ? 'Boost' : 'Use item'}
+					</button>
+				{/if}
 			</div>
 		{:else}
 			<h2>{isZap ? $nostrEvent?.title || 'Zap' : broadcastingBlock.title}</h2>
@@ -581,15 +592,19 @@
 			{#if payError}
 				<p class="pay-error">{payError}</p>
 			{/if}
-			<button
-				class:hide={isMobile && activeScreen === 'splits'}
-				class="boost"
-				class:zap={isZap}
-				disabled={paying || (isZap && !canPayZap)}
-				on:click={handlePay}
-			>
-				{paying ? 'Paying…' : isZap ? 'Zap' : 'Boost'}
-			</button>
+			{#if payError}
+				<button class="boost" type="button" on:click={() => (showModal = false)}>Close</button>
+			{:else}
+				<button
+					class:hide={isMobile && activeScreen === 'splits'}
+					class="boost"
+					class:zap={isZap}
+					disabled={paying || (isZap && !canPayZap)}
+					on:click={handlePay}
+				>
+					{paying ? 'Paying…' : isZap ? 'Zap' : 'Boost'}
+				</button>
+			{/if}
 		{/if}
 	</boost-container>
 </Modal>
