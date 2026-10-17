@@ -25,6 +25,7 @@
 	let block: Block | undefined;
 	let hls: Hls | undefined;
 	let sourceToken = 0;
+	let muted = true;
 	$: sourceVideo = $mainSettings?.liveEnclosure || (placeholderEnabled ? placeholderVideo : '');
 	// sourceVideo = 'https://listen.noagendastream.com/noagenda';
 
@@ -46,10 +47,13 @@
 			el.load();
 			return;
 		}
+
+		el.muted = muted;
+
 		if (src.includes('.m3u8')) {
 			if (el.canPlayType('application/vnd.apple.mpegurl')) {
 				el.src = src;
-				void el.play().catch(() => {});
+				startPlayback(el);
 				return;
 			}
 
@@ -66,14 +70,50 @@
 				instance.loadSource(src);
 				instance.on(HlsPlayer.Events.MANIFEST_PARSED, function (_event, data) {
 					console.log('manifest loaded, found ' + data.levels.length + ' quality level');
-					void el.play().catch(() => {});
+					startPlayback(el);
 				});
 			});
 			return;
 		}
 
 		el.src = src;
-		el.play();
+		startPlayback(el);
+	}
+
+	function startPlayback(el: HTMLVideoElement) {
+		el.muted = muted;
+		const pending = el.play();
+		if (!pending) return;
+		void pending.catch((err: unknown) => {
+			if (!isNotAllowed(err) || el.muted) return;
+			el.muted = true;
+			muted = true;
+			void el.play().catch(() => {});
+		});
+	}
+
+	function unmute() {
+		const el = player;
+		if (!el) return;
+		muted = false;
+		el.muted = false;
+		const pending = el.play();
+		if (!pending) return;
+		void pending.catch((err: unknown) => {
+			if (!isNotAllowed(err)) return;
+			el.muted = true;
+			muted = true;
+		});
+	}
+
+	function syncMuted(event: Event) {
+		const el = event.currentTarget;
+		if (!(el instanceof HTMLVideoElement)) return;
+		muted = el.muted;
+	}
+
+	function isNotAllowed(err: unknown) {
+		return err instanceof DOMException && err.name === 'NotAllowedError';
 	}
 
 	function replayFromStart() {
@@ -142,18 +182,32 @@
 		/>
 	{/if}
 	<div class="player">
-		<video
-			class:audio={showLiveChapters && (block?.image || block?.artwork)}
-			disableRemotePlayback
-			playsinline
-			controls
-			loop
-			preload="metadata"
-			on:playing={syncLivePlaying}
-			on:pause={syncLivePlaying}
-			on:ended={replayFromStart}
-			bind:this={player}
-		></video>
+		<div class="media" class:compact={showLiveChapters && (block?.image || block?.artwork)}>
+			<video
+				class:audio={showLiveChapters && (block?.image || block?.artwork)}
+				disableRemotePlayback
+				muted={muted}
+				autoplay
+				playsinline
+				controls
+				loop
+				preload="auto"
+				on:playing={syncLivePlaying}
+				on:pause={syncLivePlaying}
+				on:ended={replayFromStart}
+				on:volumechange={syncMuted}
+				bind:this={player}
+			></video>
+			{#if muted && sourceVideo}
+				<button class="unmute" type="button" aria-label="Unmute" on:click={unmute}>
+					<svg viewBox="0 0 24 24" aria-hidden="true">
+						<path
+							d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3 3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9L4.27 3zM12 4 9.91 6.09 12 8.18V4z"
+						/>
+					</svg>
+				</button>
+			{/if}
+		</div>
 	</div>
 </container>
 
@@ -192,6 +246,68 @@
 		height: 50px;
 		width: 100%;
 		max-width: 450px;
+	}
+
+	.media {
+		position: relative;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 100%;
+		height: 100%;
+		min-height: 0;
+	}
+
+	.media.compact {
+		width: min(100%, 450px);
+		height: 50px;
+	}
+
+	.unmute {
+		position: absolute;
+		z-index: 2;
+		left: 12px;
+		top: 12px;
+		width: 42px;
+		height: 42px;
+		margin: 0;
+		padding: 0;
+		border: none;
+		border-radius: 50%;
+		background: rgba(0, 0, 0, 0.55);
+		background-image: none;
+		color: #fff;
+		box-shadow: none;
+	}
+
+	.unmute svg {
+		width: 26px;
+		height: 26px;
+		fill: currentColor;
+	}
+
+	.unmute:hover {
+		background: rgba(0, 0, 0, 0.78);
+		color: #fff;
+	}
+
+	.unmute:focus-visible {
+		outline: 2px solid #fff;
+		outline-offset: 2px;
+	}
+
+	.media.compact .unmute {
+		left: auto;
+		right: 8px;
+		top: auto;
+		bottom: 9px;
+		width: 32px;
+		height: 32px;
+	}
+
+	.media.compact .unmute svg {
+		width: 20px;
+		height: 20px;
 	}
 
 	.image {
