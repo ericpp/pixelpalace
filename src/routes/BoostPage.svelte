@@ -304,26 +304,40 @@
 			if (isMobile) activeScreen = 'splits';
 			try {
 				await refreshAlbyToken();
-				await sendBoost({
+				const result = await sendBoost({
 					block: broadcastingBlock,
 					satAmount: amount,
 					boostagram,
 					senderName,
 					isDefault: fromIndex
 				});
-				const destinations = broadcastingBlock?.value?.destinations || [];
-				splitStatuses = Object.fromEntries(destinations.map((_, i) => [i, 'success']));
-				throwConfetti(amount);
-				localStorage.setItem('senderName', senderName);
-				boostagram = '';
-				await new Promise((resolve) => setTimeout(resolve, 800));
-				showModal = false;
-				splitStatuses = {};
-				if ($user.balance != null) {
-					$user.balance -= amount;
+				const statuses: Record<number, SplitStatus> = {};
+				let successCount = 0;
+				let failureCount = 0;
+				for (const payment of result.completedPayments ?? []) {
+					const status: SplitStatus = payment.success ? 'success' : 'failed';
+					const destIndex = payment.recipient?.destIndex;
+					if (destIndex != null) statuses[destIndex] = status;
+					if (payment.success) successCount += 1;
+					else failureCount += 1;
+				}
+				splitStatuses = statuses;
+				if (failureCount === 0 && successCount > 0) {
+					throwConfetti(amount);
+					localStorage.setItem('senderName', senderName);
+					boostagram = '';
+					await new Promise((resolve) => setTimeout(resolve, 800));
+					showModal = false;
+					splitStatuses = {};
+					if ($user.balance != null) {
+						$user.balance -= amount;
+					}
+				} else if (failureCount > 0) {
+					payError = 'One or more splits failed';
 				}
 			} catch (err) {
 				console.log(err);
+				payError = err instanceof Error ? err.message : 'Boost failed';
 				const destinations = broadcastingBlock?.value?.destinations || [];
 				splitStatuses = Object.fromEntries(destinations.map((_, i) => [i, 'failed']));
 			} finally {

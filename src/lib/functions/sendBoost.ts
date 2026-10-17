@@ -1,6 +1,11 @@
 import { getAlbyServer } from '$/stores';
-import type { Block } from '$lib/types';
+import type { Block, PaymentAttemptResult } from '$lib/types';
 import buildBoostPayments from './buildBoostPayments';
+
+export interface AlbyBoostResult {
+	completedPayments?: PaymentAttemptResult[];
+	message?: string;
+}
 
 export default async function sendBoost({
 	block,
@@ -14,7 +19,7 @@ export default async function sendBoost({
 	boostagram: string;
 	senderName: string;
 	isDefault?: boolean;
-}): Promise<unknown> {
+}): Promise<AlbyBoostResult> {
 	const payments = buildBoostPayments({ block, satAmount, boostagram, senderName, isDefault });
 
 	const res = await fetch(getAlbyServer() + '/api/alby/handlePayments', {
@@ -24,7 +29,10 @@ export default async function sendBoost({
 		body: JSON.stringify(payments)
 	});
 
-	const data = await res.json();
+	const data = (await res.json()) as AlbyBoostResult;
 	console.log(data);
+	if (!res.ok) {
+		throw new Error(data.message || 'Boost payment failed');
+	}
 	return data;
 }
