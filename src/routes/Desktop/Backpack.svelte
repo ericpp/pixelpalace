@@ -244,17 +244,17 @@
 		font-weight: 600;
 		font-size: clamp(15px, 1.5vw, 22px);
 		line-height: 1;
-		-webkit-text-stroke: 4px #000;
+		-webkit-text-stroke: 2px #000;
 		paint-order: stroke fill;
 		text-shadow:
-			-2px -2px 0 #000,
-			0 -2px 0 #000,
-			2px -2px 0 #000,
-			-2px 0 0 #000,
-			2px 0 0 #000,
-			-2px 2px 0 #000,
-			0 2px 0 #000,
-			2px 2px 0 #000;
+			-1px -1px 0 #000,
+			0 -1px 0 #000,
+			1px -1px 0 #000,
+			-1px 0 0 #000,
+			1px 0 0 #000,
+			-1px 1px 0 #000,
+			0 1px 0 #000,
+			1px 1px 0 #000;
 		flex: 0 0 auto;
 		cursor: pointer;
 		transition: transform 0.08s ease, border-color 0.08s ease;

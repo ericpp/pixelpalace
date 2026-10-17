@@ -109,17 +109,17 @@
 		clip-path: var(--shape);
 		font-family: var(--font-pixel);
 		font-weight: 600;
-		-webkit-text-stroke: 4px #000;
+		-webkit-text-stroke: 1px #000;
 		paint-order: stroke fill;
 		text-shadow:
-			-2px -2px 0 #000,
-			0 -2px 0 #000,
-			2px -2px 0 #000,
-			-2px 0 0 #000,
-			2px 0 0 #000,
-			-2px 2px 0 #000,
-			0 2px 0 #000,
-			2px 2px 0 #000;
+			-1px -1px 0 #000,
+			0 -1px 0 #000,
+			1px -1px 0 #000,
+			-1px 0 0 #000,
+			1px 0 0 #000,
+			-1px 1px 0 #000,
+			0 1px 0 #000,
+			1px 1px 0 #000;
 	}
 
 	.plank::before {
@@ -144,6 +144,7 @@
 	.title-text {
 		position: relative;
 		z-index: 1;
+		text-transform: uppercase;
 	}
 
 	.arrow {
